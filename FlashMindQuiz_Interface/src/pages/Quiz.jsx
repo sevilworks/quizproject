@@ -108,7 +108,10 @@ export default function QuizPage() {
       console.log("📋 Final answers array:", finalAnswers);
 
       // Submit quiz and get backend-calculated score
-      const participation = await quizService.submitQuizAnswers(id, { ids: selectedResponseIds });
+      const participation = await quizService.submitQuizAnswers(id, {
+        selectedResponseIds: selectedResponseIds,
+        studentResponses: JSON.stringify(finalAnswers)
+      });
       const backendPercentage = parseFloat(participation.score); // Backend returns percentage as BigDecimal
 
       // Calculate score out of 1250 points using backend percentage

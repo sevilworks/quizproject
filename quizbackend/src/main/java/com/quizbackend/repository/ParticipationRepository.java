@@ -10,6 +10,10 @@ import java.util.List;
 @Repository
 public interface ParticipationRepository extends JpaRepository<Participation, Integer> {
     List<Participation> findByQuizId(Integer quizId);
+    
+    @Query("SELECT p FROM Participation p LEFT JOIN FETCH p.user LEFT JOIN FETCH p.guest WHERE p.quizId = :quizId")
+    List<Participation> findByQuizIdWithUserAndGuest(Integer quizId);
+    
     List<Participation> findByUserId(Integer userId);
     List<Participation> findByGuestId(Integer guestId);
     boolean existsByQuizIdAndUserId(Integer quizId, Integer userId);

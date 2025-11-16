@@ -8,7 +8,11 @@ export default function StudentStats() {
   const [stats, setStats] = useState(null);
   const [quizHistory, setQuizHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, history, performance
+const [activeTab, setActiveTab] = useState('overview'); // overview, history, performance
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [quizDetails, setQuizDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   const user = authService.getCurrentUser();
   const studentName = user?.firstName && user?.lastName 
@@ -48,8 +52,83 @@ export default function StudentStats() {
     authService.logout();
   };
 
-  const handleGoBack = () => {
+const handleGoBack = () => {
     navigate('/student/dashboard');
+  };
+
+  const handleQuizCardClick = async (quiz) => {
+    setSelectedQuiz(quiz);
+    setIsDialogOpen(true);
+    setLoadingDetails(true);
+    
+    try {
+      // Parse student_responses JSON data (API returns snake_case)
+      let parsedResponses = [];
+      console.log('🔍 Quiz data received:', quiz);
+      console.log('🔍 student_responses field:', quiz.student_responses);
+      
+      // API returns snake_case field name
+      const responsesData = quiz.student_responses || quiz.studentResponses;
+      
+      if (responsesData) {
+        try {
+          parsedResponses = JSON.parse(responsesData);
+          console.log('✅ Parsed responses:', parsedResponses);
+          console.log('✅ Number of responses:', parsedResponses.length);
+          
+          // Fetch quiz details to get question and answer texts
+          console.log('🔍 Fetching quiz details for quiz ID:', quiz.quiz_id || quiz.quizId);
+          const quizService = (await import('../services/quizService')).quizService;
+          const quizDetailsData = await quizService.getQuizById(quiz.quiz_id || quiz.quizId);
+          console.log('📋 Quiz details fetched:', quizDetailsData);
+          
+          // Enrich responses with actual question and answer texts
+          const enrichedResponses = parsedResponses.map(response => {
+            const question = quizDetailsData.questions?.find(q => q.id === response.questionId);
+            if (!question) {
+              console.warn(`⚠️ Question not found for ID: ${response.questionId}`);
+              return response;
+            }
+            
+            const selectedResponse = question.responses?.find(r => r.id === response.selectedResponseId);
+            const correctResponse = question.responses?.find(r => r.is_correct || r.isCorrect);
+            
+            return {
+              ...response,
+              questionText: question.question_text || question.questionText || 'Question non disponible',
+              studentAnswer: selectedResponse?.response_text || selectedResponse?.responseText || 'Pas de réponse',
+              correctAnswer: correctResponse?.response_text || correctResponse?.responseText || 'Réponse correcte non disponible'
+            };
+          });
+          
+          console.log('✅ Enriched responses:', enrichedResponses);
+          parsedResponses = enrichedResponses;
+          
+        } catch (error) {
+          console.error('❌ Error parsing/enriching student responses:', error);
+          console.error('❌ Raw data:', responsesData);
+          parsedResponses = [];
+        }
+      } else {
+        console.warn('⚠️ No student_responses field found in quiz data');
+        console.warn('⚠️ Available fields:', Object.keys(quiz));
+      }
+      
+      setQuizDetails({
+        ...quiz,
+        studentResponses: parsedResponses
+      });
+    } catch (error) {
+      console.error('Error loading quiz details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedQuiz(null);
+    setQuizDetails(null);
   };
 
   const getScoreColor = (score) => {
@@ -105,13 +184,58 @@ export default function StudentStats() {
       color: #667eea !important;
     }
     
-    @media (max-width: 768px) {
+@media (max-width: 768px) {
       .stats-grid {
         grid-template-columns: 1fr !important;
       }
       .tabs {
         flex-direction: column !important;
       }
+    }
+    .quiz-card-clickable {
+      cursor: pointer;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .quiz-card-clickable:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 15px 40px rgba(0,0,0,0.3) !important;
+    }
+    .dialog-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 20px;
+    }
+    .dialog-content {
+      background-color: white;
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 800px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .question-item {
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+    .question-item.correct {
+      border-color: #28a745;
+      background-color: #d4edda;
+    }
+    .question-item.incorrect {
+      border-color: #dc3545;
+      background-color: #f8d7da;
     }
   `;
 
@@ -535,9 +659,11 @@ export default function StudentStats() {
                     display: 'grid',
                     gap: '20px'
                   }}>
-                    {quizHistory.map((quiz, index) => (
+{quizHistory.map((quiz, index) => (
                       <div
                         key={quiz.participationId || index}
+                        className="quiz-card-clickable"
+                        onClick={() => handleQuizCardClick(quiz)}
                         style={{
                           backgroundColor: 'white',
                           borderRadius: '15px',
@@ -546,7 +672,8 @@ export default function StudentStats() {
                           gridTemplateColumns: 'auto 1fr auto',
                           gap: '20px',
                           alignItems: 'center',
-                          boxShadow: '0 5px 15px rgba(0,0,0,0.1)'
+                          boxShadow: '0 5px 15px rgba(0,0,0,0.1)',
+                          cursor: 'pointer'
                         }}
                       >
                         {/* Score Circle */}
@@ -997,19 +1124,235 @@ color: '#856404'
       )}
     </div>
 
-    {/* Footer */}
-    <div style={{
-      textAlign: 'center',
-      color: 'white',
-      fontSize: '14px',
-      padding: '20px',
-      marginTop: '40px'
-    }}>
-      <p style={{ marginBottom: '5px', fontWeight: 'bold' }}>
-        © 2025 Flash Mind Quiz Time. Tous droits réservés.
-      </p>
+{/* Dialog Component */}
+      {isDialogOpen && (
+        <div className="dialog-overlay" onClick={closeDialog}>
+          <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
+            {loadingDetails ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+                <p>Chargement des détails...</p>
+              </div>
+            ) : (
+              <>
+                {/* Dialog Header */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '30px',
+                  borderBottom: '2px solid #e9ecef',
+                  paddingBottom: '20px'
+                }}>
+                  <div>
+                    <h2 style={{
+                      fontSize: '28px',
+                      fontWeight: 'bold',
+                      color: '#333',
+                      marginBottom: '10px'
+                    }}>
+                      📋 {quizDetails?.quizTitle}
+                    </h2>
+                    <div style={{
+                      display: 'flex',
+                      gap: '20px',
+                      fontSize: '14px',
+                      color: '#6c757d'
+                    }}>
+                      <span>🏅 Score: {Math.round(quizDetails?.score || 0)}%</span>
+                      <span>📅 {quizDetails?.completedAt ? new Date(quizDetails.completedAt).toLocaleDateString('fr-FR') : ''}</span>
+                      <span>👨‍🏫 {quizDetails?.professorName}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeDialog}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      color: '#6c757d',
+                      padding: '5px'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Quiz Summary */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '20px',
+                  marginBottom: '30px'
+                }}>
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎯</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>
+                      {Math.round(quizDetails?.score || 0)}%
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px' }}>Score final</div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>🏆</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>
+                      {quizDetails?.rank}/{quizDetails?.totalParticipants}
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px' }}>Classement</div>
+                  </div>
+
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>📝</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#667eea' }}>
+                      {quizDetails?.studentResponses?.length || 0}
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px' }}>Questions</div>
+                  </div>
+                </div>
+
+                {/* Questions Details */}
+                <div>
+                  <h3 style={{
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    color: '#333',
+                    marginBottom: '20px'
+                  }}>
+                    📚 Détail des réponses
+                  </h3>
+
+                  {quizDetails?.studentResponses && quizDetails.studentResponses.length > 0 ? (
+                    <div>
+                      {quizDetails.studentResponses.map((response, index) => (
+                        <div
+                          key={index}
+                          className={`question-item ${response.isCorrect ? 'correct' : 'incorrect'}`}
+                        >
+                          <div style={{ marginBottom: '15px' }}>
+                            <h4 style={{
+                              fontSize: '16px',
+                              fontWeight: 'bold',
+                              color: '#333',
+                              marginBottom: '10px'
+                            }}>
+                              Question {index + 1}
+                            </h4>
+                            <p style={{
+                              fontSize: '15px',
+                              color: '#333',
+                              lineHeight: '1.5'
+                            }}>
+                              {response.questionText || 'Question non disponible'}
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'grid', gap: '10px' }}>
+                            <div style={{
+                              padding: '10px',
+                              backgroundColor: response.isCorrect ? '#28a745' : '#dc3545',
+                              color: 'white',
+                              borderRadius: '8px',
+                              fontWeight: 'bold'
+                            }}>
+                              ✓ Votre réponse: {response.studentAnswer || 'Pas de réponse'}
+                            </div>
+
+                            {!response.isCorrect && response.correctAnswer && (
+                              <div style={{
+                                padding: '10px',
+                                backgroundColor: '#28a745',
+                                color: 'white',
+                                borderRadius: '8px'
+                              }}>
+                                ✓ Bonne réponse: {response.correctAnswer}
+                              </div>
+                            )}
+
+                            {response.timeSpent && (
+                              <div style={{
+                                fontSize: '14px',
+                                color: '#6c757d'
+                              }}>
+                                ⏱️ Temps passé: {response.timeSpent} secondes
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '40px',
+                      color: '#6c757d'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '20px' }}>📝</div>
+                      <p>Aucune donnée de réponse détaillée disponible</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '30px',
+                  paddingTop: '20px',
+                  borderTop: '2px solid #e9ecef'
+                }}>
+                  <button
+                    onClick={closeDialog}
+                    style={{
+                      padding: '12px 30px',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      color: 'white',
+                      backgroundColor: '#667eea',
+                      border: 'none',
+                      borderRadius: '25px',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{
+        textAlign: 'center',
+        color: 'white',
+        fontSize: '14px',
+        padding: '20px',
+        marginTop: '40px'
+      }}>
+        <p style={{ marginBottom: '5px', fontWeight: 'bold' }}>
+          © 2025 Flash Mind Quiz Time. Tous droits réservés.
+        </p>
+      </div>
     </div>
-  </div>
-</>
+  </>
 );
 }

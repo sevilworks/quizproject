@@ -35,6 +35,7 @@ com/quizbackend/repository/SubscriptionRepository.class
 com/quizbackend/service/ProfessorService.class
 com/quizbackend/repository/GuestRepository.class
 com/quizbackend/controller/TestController.class
+com/quizbackend/dto/QuizSubmissionRequest.class
 com/quizbackend/entity/User.class
 com/quizbackend/repository/QuestionRepository.class
 com/quizbackend/dto/ParticipationDto$QuizSummary.class
@@ -51,6 +52,7 @@ com/quizbackend/controller/StudentController.class
 com/quizbackend/controller/AdminController$AssignSubscriptionRequest.class
 com/quizbackend/dto/StudentStatsDTO.class
 com/quizbackend/repository/StudentRepository.class
+com/quizbackend/dto/SubmitQuizRequest.class
 com/quizbackend/controller/AuthController$StudentRegisterRequest.class
 com/quizbackend/security/JwtUtil.class
 com/quizbackend/dto/StudentDto.class

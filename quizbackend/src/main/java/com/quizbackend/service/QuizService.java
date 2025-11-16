@@ -113,6 +113,68 @@ public class QuizService {
         return responseRepository.save(response);
     }
 
+    public Question updateQuestion(Integer questionId, Question updatedQuestion, Integer professorId) {
+        Question existingQuestion = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        Quiz quiz = existingQuestion.getQuiz();
+        if (!quiz.getProfessorId().equals(professorId)) {
+            throw new RuntimeException("Unauthorized to update this question");
+        }
+
+        // Only update if the new question text is not null
+        if (updatedQuestion.getQuestionText() != null && !updatedQuestion.getQuestionText().trim().isEmpty()) {
+            existingQuestion.setQuestionText(updatedQuestion.getQuestionText());
+        }
+        return questionRepository.save(existingQuestion);
+    }
+
+    public void deleteQuestion(Integer questionId, Integer professorId) {
+        Question question = questionRepository.findById(questionId)
+                .orElseThrow(() -> new RuntimeException("Question not found"));
+
+        Quiz quiz = question.getQuiz();
+        if (!quiz.getProfessorId().equals(professorId)) {
+            throw new RuntimeException("Unauthorized to delete this question");
+        }
+
+        questionRepository.delete(question);
+    }
+
+    public Response updateResponse(Integer responseId, Response updatedResponse, Integer professorId) {
+        Response existingResponse = responseRepository.findById(responseId)
+                .orElseThrow(() -> new RuntimeException("Response not found"));
+
+        Question question = existingResponse.getQuestion();
+        Quiz quiz = question.getQuiz();
+        if (!quiz.getProfessorId().equals(professorId)) {
+            throw new RuntimeException("Unauthorized to update this response");
+        }
+
+        // Only update if the new response text is not null
+        if (updatedResponse.getResponseText() != null && !updatedResponse.getResponseText().trim().isEmpty()) {
+            existingResponse.setResponseText(updatedResponse.getResponseText());
+        }
+        // Update isCorrect flag (can be true or false)
+        if (updatedResponse.getIsCorrect() != null) {
+            existingResponse.setIsCorrect(updatedResponse.getIsCorrect());
+        }
+        return responseRepository.save(existingResponse);
+    }
+
+    public void deleteResponse(Integer responseId, Integer professorId) {
+        Response response = responseRepository.findById(responseId)
+                .orElseThrow(() -> new RuntimeException("Response not found"));
+
+        Question question = response.getQuestion();
+        Quiz quiz = question.getQuiz();
+        if (!quiz.getProfessorId().equals(professorId)) {
+            throw new RuntimeException("Unauthorized to delete this response");
+        }
+
+        responseRepository.delete(response);
+    }
+
     public Participation submitQuizAnswers(Integer quizId, List<Integer> selectedResponseIds,
                                            Integer userId, Integer guestId, Integer studentId,
                                            String studentResponses) {
@@ -185,7 +247,8 @@ public class QuizService {
             throw new RuntimeException("Unauthorized to view participations for this quiz");
         }
 
-        return participationRepository.findByQuizId(quizId);
+        // Use the custom query that eagerly fetches user and guest
+        return participationRepository.findByQuizIdWithUserAndGuest(quizId);
     }
 
     public List<Participation> getUserParticipations(Integer userId) {

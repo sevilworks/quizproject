@@ -654,6 +654,7 @@ public class StudentService {
 
         dto.setRank((int) rank);
         dto.setTotalParticipants(allParticipations.size());
+        dto.setStudentResponses(participation.getStudentResponses());
 
         return dto;
     }

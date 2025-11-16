@@ -13,13 +13,14 @@ public class QuizHistoryDTO {
     private String professorName;
     private int rank;
     private int totalParticipants;
+    private String studentResponses;
 
     // Constructors
     public QuizHistoryDTO() {}
 
     public QuizHistoryDTO(Integer participationId, Integer quizId, String quizTitle,
                          String quizDescription, BigDecimal score, LocalDateTime completedAt,
-                         String professorName, int rank, int totalParticipants) {
+                         String professorName, int rank, int totalParticipants, String studentResponses) {
         this.participationId = participationId;
         this.quizId = quizId;
         this.quizTitle = quizTitle;
@@ -29,6 +30,7 @@ public class QuizHistoryDTO {
         this.professorName = professorName;
         this.rank = rank;
         this.totalParticipants = totalParticipants;
+        this.studentResponses = studentResponses;
     }
 
     // Getters and Setters
@@ -58,4 +60,7 @@ public class QuizHistoryDTO {
 
     public int getTotalParticipants() { return totalParticipants; }
     public void setTotalParticipants(int totalParticipants) { this.totalParticipants = totalParticipants; }
+
+    public String getStudentResponses() { return studentResponses; }
+    public void setStudentResponses(String studentResponses) { this.studentResponses = studentResponses; }
 }

@@ -1,39 +1,76 @@
-import { useState } from 'react';
-import { Search, Filter, Clock, CheckCircle, XCircle, Eye, BookOpen, User, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Clock, CheckCircle, XCircle, Eye, BookOpen, User, Calendar, Loader, AlertCircle, Trash2 } from 'lucide-react';
+import adminService from '../../../services/adminService.js';
 
 export default function ListQuiz() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedQuiz, setSelectedQuiz] = useState(null);
-  const [quizzes, setQuizzes] = useState([
-    { id: 1, title: 'JavaScript Fondamentaux', professor: 'Prof. Tasnim Belghith', category: 'Programmation', questions: 5, status: 'pending', createdAt: '2025-10-16', difficulty: 'Facile' },
-    { id: 2, title: 'Histoire de Tunisie', professor: 'Prof. Rabeb Chtiti', category: 'Histoire', questions: 15, status: 'approved', createdAt: '2025-08-08', difficulty: 'Moyen' },
-    { id: 3, title: 'Mathématiques Avancées', professor: 'Prof. Aziz Mdalal', category: 'Mathématiques', questions: 25, status: 'pending', createdAt: '2025-10-12', difficulty: 'Difficile' },
-    { id: 4, title: 'Biologie Cellulaire', professor: 'Prof. Tasnim Belghith', category: 'Sciences', questions: 18, status: 'rejected', createdAt: '2025-10-05', difficulty: 'Moyen' },
-    { id: 5, title: 'Anglais B2', professor: 'Prof. Rabeb Chtiti', category: 'Langues', questions: 30, status: 'approved', createdAt: '2025-10-01', difficulty: 'Facile' },
-    { id: 6, title: 'Chimie Organique', professor: 'Prof. Aziz Mdalal', category: 'Sciences', questions: 22, status: 'pending', createdAt: '2025-07-13', difficulty: 'Difficile' },
-    { id: 7, title: 'Physique Quantique', professor: 'Prof. Mohamed Ali', category: 'Physique', questions: 20, status: 'pending', createdAt: '2025-10-15', difficulty: 'Difficile' },
-    { id: 8, title: 'Français Intermédiaire', professor: 'Prof. Sophie Martin', category: 'Langues', questions: 12, status: 'pending', createdAt: '2025-10-14', difficulty: 'Moyen' },
-    { id: 9, title: 'Économie Internationale', professor: 'Prof. Ahmed Khan', category: 'Économie', questions: 16, status: 'pending', createdAt: '2025-10-13', difficulty: 'Moyen' },
-    { id: 10, title: 'Algorithmes et Structures', professor: 'Prof. Laura Chen', category: 'Informatique', questions: 28, status: 'pending', createdAt: '2025-10-11', difficulty: 'Difficile' },
-    { id: 11, title: 'Art Moderne', professor: 'Prof. Elena Rossi', category: 'Art', questions: 8, status: 'pending', createdAt: '2025-10-10', difficulty: 'Facile' },
-    { id: 12, title: 'Géographie Mondiale', professor: 'Prof. Carlos Silva', category: 'Géographie', questions: 14, status: 'pending', createdAt: '2025-10-09', difficulty: 'Moyen' }
-  ]);
+  const [quizzes, setQuizzes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Fonction pour approuver un quiz
+  // Fetch quizzes data
+  useEffect(() => {
+    const fetchQuizzes = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const quizzesData = await adminService.getQuizzes();
+        
+        // Process and normalize quiz data
+        const processedQuizzes = quizzesData.map(quiz => ({
+          id: quiz.id,
+          title: quiz.title || 'N/A',
+          professor: quiz.professor?.user?.fullName || quiz.professor?.fullName || quiz.professor?.username || 'N/A',
+          category: quiz.category || 'Général',
+          questions: quiz.questions?.length || 0,
+          status: quiz.isActive ? 'approved' : 'pending',
+          createdAt: quiz.createdAt ? new Date(quiz.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          difficulty: quiz.difficulty || 'Moyen',
+          description: quiz.description || 'Description non disponible',
+          isActive: quiz.isActive !== false
+        }));
+        
+        setQuizzes(processedQuizzes);
+      } catch (err) {
+        console.error('Error fetching quizzes:', err);
+        setError('Erreur lors du chargement des quiz');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuizzes();
+  }, []);
+
+  // Fonction pour supprimer un quiz
+  const handleDeleteQuiz = async (quizId) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce quiz ?')) {
+      try {
+        await adminService.deleteQuiz(quizId);
+        setQuizzes(quizzes.filter(quiz => quiz.id !== quizId));
+      } catch (err) {
+        console.error('Error deleting quiz:', err);
+        setError('Erreur lors de la suppression du quiz');
+      }
+    }
+  };
+
+  // Fonction pour approuver un quiz (placeholder for future implementation)
   const approveQuiz = (quizId) => {
-    setQuizzes(prevQuizzes => 
-      prevQuizzes.map(quiz => 
+    setQuizzes(prevQuizzes =>
+      prevQuizzes.map(quiz =>
         quiz.id === quizId ? { ...quiz, status: 'approved' } : quiz
       )
     );
     setSelectedQuiz(null); // Fermer la modal après action
   };
 
-  // Fonction pour rejeter un quiz
+  // Fonction pour rejeter un quiz (placeholder for future implementation)
   const rejectQuiz = (quizId) => {
-    setQuizzes(prevQuizzes => 
-      prevQuizzes.map(quiz => 
+    setQuizzes(prevQuizzes =>
+      prevQuizzes.map(quiz =>
         quiz.id === quizId ? { ...quiz, status: 'rejected' } : quiz
       )
     );
@@ -152,41 +189,63 @@ export default function ListQuiz() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">En Attente</p>
-                <p className="text-3xl font-bold text-orange-600 mt-1">{pendingCount}</p>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center space-x-2">
+              <Loader className="w-6 h-6 animate-spin text-blue-600" />
+              <span className="text-gray-600">Chargement des quiz...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <span className="text-red-700">{error}</span>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">En Attente</p>
+                  <p className="text-3xl font-bold text-orange-600 mt-1">{pendingCount}</p>
+                </div>
+                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-orange-600" />
+                </div>
               </div>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-orange-600" />
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Approuvés</p>
+                  <p className="text-3xl font-bold text-green-600 mt-1">{approvedCount}</p>
+                </div>
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm font-medium">Total Quiz</p>
+                  <p className="text-3xl font-bold text-blue-600 mt-1">{quizzes.length}</p>
+                </div>
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <BookOpen className="w-6 h-6 text-blue-600" />
+                </div>
               </div>
             </div>
           </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Approuvés</p>
-                <p className="text-3xl font-bold text-green-600 mt-1">{approvedCount}</p>
-              </div>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Rejetés</p>
-                <p className="text-3xl font-bold text-red-600 mt-1">{rejectedCount}</p>
-              </div>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <XCircle className="w-6 h-6 text-red-600" />
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -216,64 +275,75 @@ export default function ListQuiz() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredQuizzes.map(quiz => (
-            <div key={quiz.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-              <div className={`h-2 ${
-                quiz.status === 'pending' ? 'bg-orange-500' :
-                quiz.status === 'approved' ? 'bg-green-500' : 'bg-red-500'
-              }`} />
-              
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{quiz.title}</h3>
-                    <div className="flex items-center text-sm text-gray-600 mb-1">
-                      <User className="w-4 h-4 mr-2" />
-                      {quiz.professor}
-                    </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      {quiz.createdAt}
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredQuizzes.map(quiz => (
+              <div key={quiz.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                <div className={`h-2 ${
+                  quiz.status === 'pending' ? 'bg-orange-500' :
+                  quiz.status === 'approved' ? 'bg-green-500' : 'bg-red-500'
+                }`} />
+                
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">{quiz.title}</h3>
+                      <div className="flex items-center text-sm text-gray-600 mb-1">
+                        <User className="w-4 h-4 mr-2" />
+                        {quiz.professor}
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Calendar className="w-4 h-4 mr-2" />
+                        {quiz.createdAt}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                    {quiz.category}
-                  </span>
-                  <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
-                    {quiz.difficulty}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
-                  <div className="flex items-center text-gray-600">
-                    <BookOpen className="w-5 h-5 mr-2" />
-                    <span className="text-sm font-medium">{quiz.questions} questions</span>
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                      {quiz.category}
+                    </span>
+                    <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                      {quiz.difficulty}
+                    </span>
                   </div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                    quiz.status === 'pending' ? 'bg-orange-100 text-orange-700' :
-                    quiz.status === 'approved' ? 'bg-green-100 text-green-700' :
-                    'bg-red-100 text-red-700'
-                  }`}>
-                    {quiz.status === 'pending' ? 'En attente' :
-                     quiz.status === 'approved' ? 'Approuvé' : 'Rejeté'}
-                  </span>
-                </div>
 
-                <button
-                  onClick={() => setSelectedQuiz(quiz)}
-                  className="w-full px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2"
-                >
-                  <Eye className="w-5 h-5" />
-                  Examiner le Quiz
-                </button>
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
+                    <div className="flex items-center text-gray-600">
+                      <BookOpen className="w-5 h-5 mr-2" />
+                      <span className="text-sm font-medium">{quiz.questions} questions</span>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      quiz.status === 'pending' ? 'bg-orange-100 text-orange-700' :
+                      quiz.status === 'approved' ? 'bg-green-100 text-green-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {quiz.status === 'pending' ? 'En attente' :
+                       quiz.status === 'approved' ? 'Approuvé' : 'Rejeté'}
+                    </span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedQuiz(quiz)}
+                      className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white font-medium rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Eye className="w-5 h-5" />
+                      Examiner
+                    </button>
+                    <button
+                      onClick={() => handleDeleteQuiz(quiz.id)}
+                      className="px-4 py-3 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-all flex items-center justify-center"
+                      title="Supprimer le quiz"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <QuizDetailModal quiz={selectedQuiz} onClose={() => setSelectedQuiz(null)} />

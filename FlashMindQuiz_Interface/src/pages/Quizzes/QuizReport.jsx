@@ -15,6 +15,10 @@ export default function QuizReport() {
     successRate: '0%',
     duration: '0 min'
   });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedParticipation, setSelectedParticipation] = useState(null);
+  const [participationDetails, setParticipationDetails] = useState(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
   // Validate quiz ID parameter
   const quizId = parseInt(id);
@@ -131,28 +135,70 @@ export default function QuizReport() {
 
   // Transform participations data for display
   const participants = participations.map(p => {
-    // Format participant name
+    // Format participant name - use actual names from backend (snake_case from API)
     let name = 'Participant anonyme';
-    if (p.userId) {
-      name = `Étudiant ${p.userId}`;
-    } else if (p.guestId) {
-      name = `Invité ${p.guestId}`;
+    let email = '';
+    
+    if (p.user_name) {
+      // Student/User with actual username
+      name = p.user_name;
+      email = p.user_email || '';
+    } else if (p.guest_name) {
+      // Guest with actual pseudo
+      name = p.guest_name;
+    } else if (p.user_id) {
+      // Fallback if name not provided
+      name = `Étudiant ${p.user_id}`;
+    } else if (p.guest_id) {
+      // Fallback if guest name not provided
+      name = `Invité ${p.guest_id}`;
     }
 
     // Format activity (last activity time)
-    const createdAt = new Date(p.createdAt);
-    const now = new Date();
-    const diffTime = Math.abs(now - createdAt);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
     let activity = 'Récemment';
-    if (diffDays === 1) activity = 'Aujourd\'hui';
-    else if (diffDays === 2) activity = 'Hier';
-    else if (diffDays <= 7) activity = 'Cette semaine';
-    else activity = 'Il y a longtemps';
+    let timing = 'N/A';
+    
+    if (p.created_at) {
+      try {
+        // Handle LocalDateTime from backend (format: "2024-01-15T10:30:00")
+        const createdAt = new Date(p.created_at);
+        
+        if (!isNaN(createdAt.getTime())) {
+          const now = new Date();
+          const diffTime = Math.abs(now - createdAt);
+          const diffMinutes = Math.floor(diffTime / (1000 * 60));
+          const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+          const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // Format timing
-    const timing = createdAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+          if (diffMinutes < 60) {
+            activity = `Il y a ${diffMinutes} min`;
+          } else if (diffHours < 24) {
+            activity = `Il y a ${diffHours}h`;
+          } else if (diffDays === 0) {
+            activity = 'Aujourd\'hui';
+          } else if (diffDays === 1) {
+            activity = 'Hier';
+          } else if (diffDays <= 7) {
+            activity = `Il y a ${diffDays} jours`;
+          } else if (diffDays <= 30) {
+            activity = `Il y a ${Math.floor(diffDays / 7)} semaines`;
+          } else {
+            activity = 'Il y a longtemps';
+          }
+
+          // Format timing
+          timing = createdAt.toLocaleString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing date:', error);
+      }
+    }
 
     // Create avatar
     const avatar = name.charAt(0).toUpperCase() + (name.split(' ')[1] ? name.split(' ')[1].charAt(0).toUpperCase() : '');
@@ -160,12 +206,69 @@ export default function QuizReport() {
     return {
       id: p.id,
       name,
+      email,
       activity,
       timing,
       avatar,
-      score: p.score
+      score: p.score !== null && p.score !== undefined ? `${Math.round(p.score)}%` : 'N/A'
     };
   });
+
+  const handleViewDetails = async (participation) => {
+    setSelectedParticipation(participation);
+    setIsDialogOpen(true);
+    setLoadingDetails(true);
+    
+    try {
+      // Parse student_responses JSON data
+      let parsedResponses = [];
+      const responsesData = participation.student_responses;
+      
+      if (responsesData) {
+        try {
+          parsedResponses = JSON.parse(responsesData);
+          
+          // Enrich responses with actual question and answer texts
+          const enrichedResponses = parsedResponses.map(response => {
+            const question = quiz.questions?.find(q => q.id === response.questionId);
+            if (!question) {
+              return response;
+            }
+            
+            const selectedResponse = question.responses?.find(r => r.id === response.selectedResponseId);
+            const correctResponse = question.responses?.find(r => r.is_correct || r.isCorrect);
+            
+            return {
+              ...response,
+              questionText: question.question_text || question.questionText || 'Question non disponible',
+              studentAnswer: selectedResponse?.response_text || selectedResponse?.responseText || 'Pas de réponse',
+              correctAnswer: correctResponse?.response_text || correctResponse?.responseText || 'Réponse correcte non disponible'
+            };
+          });
+          
+          parsedResponses = enrichedResponses;
+        } catch (error) {
+          console.error('Error parsing student responses:', error);
+          parsedResponses = [];
+        }
+      }
+      
+      setParticipationDetails({
+        ...participation,
+        studentResponses: parsedResponses
+      });
+    } catch (error) {
+      console.error('Error loading participation details:', error);
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const closeDialog = () => {
+    setIsDialogOpen(false);
+    setSelectedParticipation(null);
+    setParticipationDetails(null);
+  };
 
   // Cartes statistiques
   const statsCards = [
@@ -259,37 +362,302 @@ export default function QuizReport() {
         {/* Liste des participants */}
         <div className="bg-white rounded-3xl shadow-lg p-6 mt-6 overflow-auto">
           <h2 className="text-2xl font-bold mb-4">Liste des participants</h2>
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="border-b-2 border-gray-200">
-                <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Nom</th>
-                <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Dernière activité</th>
-                <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Temps</th>
-                <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {participants.map(p => (
-                <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                  <td className="py-4 px-4 flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#624BFF] to-[#7C5FFF] flex items-center justify-center text-white text-sm font-bold shadow-lg">
-                    {p.avatar}
-                  </div>
-                    <span className="font-semibold text-gray-900">{p.name}</span>
-                  </td>
-                  <td className="py-4 px-4 text-gray-600">{p.activity}</td>
-                  <td className="py-4 px-4 text-gray-600">{p.timing}</td>
-                  <td className="py-4 px-4">
-                    <button className="px-4 py-2 text-sm text-[#624BFF] border border-[#624BFF] rounded-lg hover:bg-[#EDEBFF] flex items-center gap-1">
-                      <Eye className="w-4 h-4"/> Voir performance
-                    </button>
-                  </td>
+          {participants.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">Aucun participant pour le moment</p>
+              <p className="text-gray-400 text-sm mt-2">Les participants apparaîtront ici une fois qu'ils auront complété le quiz</p>
+            </div>
+          ) : (
+            <table className="w-full table-auto">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Nom</th>
+                  <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Score</th>
+                  <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Dernière activité</th>
+                  <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Date/Heure</th>
+                  <th className="text-left py-3 px-4 text-gray-500 font-semibold text-sm">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {participants.map(p => (
+                  <tr key={p.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#624BFF] to-[#7C5FFF] flex items-center justify-center text-white text-sm font-bold shadow-lg">
+                          {p.avatar}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-900">{p.name}</span>
+                          {p.email && <span className="text-xs text-gray-500">{p.email}</span>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className={`font-bold ${
+                        p.score !== 'N/A' && parseFloat(p.score) >= 70
+                          ? 'text-green-600'
+                          : p.score !== 'N/A'
+                          ? 'text-red-600'
+                          : 'text-gray-400'
+                      }`}>
+                        {p.score}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4 text-gray-600">{p.activity}</td>
+                    <td className="py-4 px-4 text-gray-600 text-sm">{p.timing}</td>
+                    <td className="py-4 px-4">
+                      <button
+                        onClick={() => handleViewDetails(participations.find(part => part.id === p.id))}
+                        className="px-4 py-2 text-sm text-[#624BFF] border border-[#624BFF] rounded-lg hover:bg-[#EDEBFF] flex items-center gap-1 transition-colors"
+                      >
+                        <Eye className="w-4 h-4"/> Voir détails
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
+
+      {/* Dialog Component */}
+      {isDialogOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={closeDialog}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              padding: '30px',
+              maxWidth: '800px',
+              width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {loadingDetails ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <div style={{ fontSize: '48px', marginBottom: '20px' }}>⏳</div>
+                <p>Chargement des détails...</p>
+              </div>
+            ) : (
+              <>
+                {/* Dialog Header */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '30px',
+                  borderBottom: '2px solid #e9ecef',
+                  paddingBottom: '20px'
+                }}>
+                  <div>
+                    <h2 style={{
+                      fontSize: '28px',
+                      fontWeight: 'bold',
+                      color: '#333',
+                      marginBottom: '10px'
+                    }}>
+                      📋 Détails de la participation
+                    </h2>
+                    <div style={{
+                      display: 'flex',
+                      gap: '20px',
+                      fontSize: '14px',
+                      color: '#6c757d',
+                      flexWrap: 'wrap'
+                    }}>
+                      <span>👤 {participants.find(p => p.id === selectedParticipation?.id)?.name}</span>
+                      <span>🏅 Score: {Math.round(participationDetails?.score || 0)}%</span>
+                      <span>📅 {participationDetails?.created_at ? new Date(participationDetails.created_at).toLocaleDateString('fr-FR') : ''}</span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeDialog}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '24px',
+                      cursor: 'pointer',
+                      color: '#6c757d',
+                      padding: '5px'
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Quiz Summary */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '20px',
+                  marginBottom: '30px'
+                }}>
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>🎯</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#624BFF' }}>
+                      {Math.round(participationDetails?.score || 0)}%
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px' }}>Score final</div>
+                  </div>
+                  
+                  <div style={{
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: '32px', marginBottom: '10px' }}>📝</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#624BFF' }}>
+                      {participationDetails?.studentResponses?.length || 0}
+                    </div>
+                    <div style={{ color: '#6c757d', fontSize: '14px' }}>Questions</div>
+                  </div>
+                </div>
+
+                {/* Questions Details */}
+                <div>
+                  <h3 style={{
+                    fontSize: '20px',
+                    fontWeight: 'bold',
+                    color: '#333',
+                    marginBottom: '20px'
+                  }}>
+                    📚 Détail des réponses
+                  </h3>
+
+                  {participationDetails?.studentResponses && participationDetails.studentResponses.length > 0 ? (
+                    <div>
+                      {participationDetails.studentResponses.map((response, index) => (
+                        <div
+                          key={index}
+                          style={{
+                            border: `2px solid ${response.isCorrect ? '#28a745' : '#dc3545'}`,
+                            borderRadius: '12px',
+                            padding: '20px',
+                            marginBottom: '15px',
+                            backgroundColor: response.isCorrect ? '#d4edda' : '#f8d7da'
+                          }}
+                        >
+                          <div style={{ marginBottom: '15px' }}>
+                            <h4 style={{
+                              fontSize: '16px',
+                              fontWeight: 'bold',
+                              color: '#333',
+                              marginBottom: '10px'
+                            }}>
+                              Question {index + 1}
+                            </h4>
+                            <p style={{
+                              fontSize: '15px',
+                              color: '#333',
+                              lineHeight: '1.5'
+                            }}>
+                              {response.questionText || 'Question non disponible'}
+                            </p>
+                          </div>
+
+                          <div style={{ display: 'grid', gap: '10px' }}>
+                            <div style={{
+                              padding: '10px',
+                              backgroundColor: response.isCorrect ? '#28a745' : '#dc3545',
+                              color: 'white',
+                              borderRadius: '8px',
+                              fontWeight: 'bold'
+                            }}>
+                              {response.isCorrect ? '✓' : '✗'} Réponse de l'étudiant: {response.studentAnswer || 'Pas de réponse'}
+                            </div>
+
+                            {!response.isCorrect && response.correctAnswer && (
+                              <div style={{
+                                padding: '10px',
+                                backgroundColor: '#28a745',
+                                color: 'white',
+                                borderRadius: '8px'
+                              }}>
+                                ✓ Bonne réponse: {response.correctAnswer}
+                              </div>
+                            )}
+
+                            {response.timeSpent && (
+                              <div style={{
+                                fontSize: '14px',
+                                color: '#6c757d'
+                              }}>
+                                ⏱️ Temps passé: {response.timeSpent} secondes
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      textAlign: 'center',
+                      padding: '40px',
+                      color: '#6c757d'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '20px' }}>📝</div>
+                      <p>Aucune donnée de réponse détaillée disponible</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <div style={{
+                  textAlign: 'center',
+                  marginTop: '30px',
+                  paddingTop: '20px',
+                  borderTop: '2px solid #e9ecef'
+                }}>
+                  <button
+                    onClick={closeDialog}
+                    style={{
+                      padding: '12px 30px',
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      color: 'white',
+                      backgroundColor: '#624BFF',
+                      border: 'none',
+                      borderRadius: '25px',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s'
+                    }}
+                    onMouseOver={(e) => e.target.style.transform = 'scale(1.05)'}
+                    onMouseOut={(e) => e.target.style.transform = 'scale(1)'}
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
