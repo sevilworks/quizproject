@@ -14,6 +14,9 @@ public class ParticipationDto {
     private QuizSummary quiz;
     private Integer userId;
     private Integer guestId;
+    private String userName;
+    private String userEmail;
+    private String guestName;
     private Integer questionCount;
     private Integer correctAnswers;
     private Integer duration;
@@ -36,6 +39,17 @@ public class ParticipationDto {
         dto.setUserId(p.getUserId());
         dto.setGuestId(p.getGuestId());
         dto.setStudentResponses(p.getStudentResponses());
+
+        // Add user details if available
+        if (p.getUser() != null) {
+            dto.setUserName(p.getUser().getUsername());
+            dto.setUserEmail(p.getUser().getEmail());
+        }
+
+        // Add guest details if available
+        if (p.getGuest() != null) {
+            dto.setGuestName(p.getGuest().getPseudo());
+        }
 
         com.quizbackend.entity.Quiz q = p.getQuiz();
         if (q != null) {

@@ -43,18 +43,48 @@ export const quizService = {
     return response.data;
   },
 
+  // Update question (Professor)
+  updateQuestion: async (questionId, questionData) => {
+    const response = await api.put(`/quiz/questions/${questionId}`, questionData);
+    return response.data;
+  },
+
+  // Delete question (Professor)
+  deleteQuestion: async (questionId) => {
+    const response = await api.delete(`/quiz/questions/${questionId}`);
+    return response.data;
+  },
+
+  // Update response (Professor)
+  updateResponse: async (responseId, responseData) => {
+    const response = await api.put(`/quiz/responses/${responseId}`, responseData);
+    return response.data;
+  },
+
+  // Delete response (Professor)
+  deleteResponse: async (responseId) => {
+    const response = await api.delete(`/quiz/responses/${responseId}`);
+    return response.data;
+  },
+
   // Soumettre les réponses du quiz
   submitQuizAnswers: async (quizId, data) => {
     console.log("📡 API call: POST /quiz/${quizId}/submit");
     console.log("📤 Sending data:", JSON.stringify(data, null, 2));
     console.log("🔍 Data type:", typeof data);
     console.log("🔍 Data keys:", Object.keys(data));
-    if (data.ids) {
-      console.log("🎯 ids length:", data.ids.length);
-      console.log("🎯 ids values:", data.ids);
-    }
-    const payload = { selectedResponseIds: data.ids };
+    
+    // Create payload matching backend SubmitQuizRequest DTO
+    // Backend expects: selectedResponseIds (array) and studentResponses (JSON string)
+    const payload = {
+      selectedResponseIds: data.selectedResponseIds,
+      studentResponses: data.studentResponses  // Already a JSON string from Quiz.jsx
+    };
+    
     console.log("📤 Sending payload:", JSON.stringify(payload, null, 2));
+    console.log("🎯 selectedResponseIds:", payload.selectedResponseIds);
+    console.log("🎯 studentResponses (JSON string):", payload.studentResponses);
+    
     const response = await api.post(`/quiz/${quizId}/submit`, payload);
     console.log("✅ Response received:", response.data);
     return response.data;

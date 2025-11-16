@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { Search, Filter, MessageSquare, Clock, CheckCircle, AlertCircle, User, Calendar, Send } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, MessageSquare, Clock, CheckCircle, AlertCircle, User, Calendar, Send, Construction, Info, Loader } from 'lucide-react';
+import adminService from '../../../services/adminService.js';
 
 export default function ListReclamation() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -7,75 +8,107 @@ export default function ListReclamation() {
   const [filterPriority, setFilterPriority] = useState('all');
   const [selectedReclamation, setSelectedReclamation] = useState(null);
   const [responseText, setResponseText] = useState('');
+  const [reclamations, setReclamations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const [reclamations, setReclamations] = useState([
-    { 
-      id: 1, 
-      student: 'Ahmed Ben Ali', 
-      email: 'ahmed@example.com', 
-      subject: 'Problème d\'accès au quiz',
-      message: 'Je ne peux pas accéder au quiz de mathématiques. Le système affiche une erreur 404.',
-      category: 'Technique',
-      priority: 'high',
-      status: 'pending',
-      createdAt: '2024-10-14 10:30',
-      responses: []
-    },
-    { 
-      id: 2, 
-      student: 'Leila Khaled', 
-      email: 'leila@example.com', 
-      subject: 'Note incorrecte',
-      message: 'Ma note finale pour le quiz d\'histoire ne correspond pas à mes réponses correctes.',
-      category: 'Notes',
-      priority: 'medium',
-      status: 'in_progress',
-      createdAt: '2024-10-13 14:20',
-      responses: [
-        { date: '2024-10-13 15:00', text: 'Nous examinons votre cas. Merci de votre patience.' }
-      ]
-    },
-    { 
-      id: 3, 
-      student: 'Amine Sassi', 
-      email: 'amine@example.com', 
-      subject: 'Question sur l\'abonnement',
-      message: 'Comment puis-je annuler mon abonnement premium ?',
-      category: 'Abonnement',
-      priority: 'low',
-      status: 'resolved',
-      createdAt: '2024-10-12 09:15',
-      responses: [
-        { date: '2024-10-12 10:30', text: 'Vous pouvez annuler depuis votre profil > Paramètres > Abonnement.' }
-      ]
-    },
-    { 
-      id: 4, 
-      student: 'Sarra Mejri', 
-      email: 'sarra@example.com', 
-      subject: 'Bug dans l\'interface',
-      message: 'L\'interface se fige quand j\'essaie de soumettre mes réponses.',
-      category: 'Technique',
-      priority: 'high',
-      status: 'pending',
-      createdAt: '2024-10-14 16:45',
-      responses: []
-    },
-    { 
-      id: 5, 
-      student: 'Youssef Ben Omar', 
-      email: 'youssef@example.com', 
-      subject: 'Contenu du quiz inapproprié',
-      message: 'Une question dans le quiz de biologie contient des informations erronées.',
-      category: 'Contenu',
-      priority: 'medium',
-      status: 'in_progress',
-      createdAt: '2024-10-13 11:00',
-      responses: [
-        { date: '2024-10-13 12:00', text: 'Nous vérifions le contenu avec le professeur concerné.' }
-      ]
-    }
-  ]);
+  // Fetch reclamations data
+  useEffect(() => {
+    const fetchReclamations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Try to fetch reclamations from API (may not exist yet)
+        const reclamationsData = await adminService.getReclamations().catch(() => null);
+        
+        if (reclamationsData) {
+          // Process and normalize reclamation data from API
+          const processedReclamations = reclamationsData.map(rec => ({
+            id: rec.id,
+            student: rec.student?.user?.fullName || rec.student?.fullName || rec.student?.username || 'N/A',
+            email: rec.student?.user?.email || rec.student?.email || 'N/A',
+            subject: rec.subject || 'Sujet non spécifié',
+            message: rec.message || 'Message non disponible',
+            category: rec.category || 'Général',
+            priority: rec.priority || 'medium',
+            status: rec.status || 'pending',
+            createdAt: rec.createdAt ? new Date(rec.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            responses: rec.responses || []
+          }));
+          
+          setReclamations(processedReclamations);
+        } else {
+          // Use fallback static data with API integration patterns
+          console.log('Using fallback data - API endpoint not available yet');
+          setReclamations([
+            {
+              id: 1,
+              student: 'Ahmed Ben Ali',
+              email: 'ahmed@example.com',
+              subject: 'Problème d\'accès au quiz',
+              message: 'Je ne peux pas accéder au quiz de mathématiques. Le système affiche une erreur 404.',
+              category: 'Technique',
+              priority: 'high',
+              status: 'pending',
+              createdAt: '2024-10-14 10:30',
+              responses: []
+            },
+            {
+              id: 2,
+              student: 'Leila Khaled',
+              email: 'leila@example.com',
+              subject: 'Note incorrecte',
+              message: 'Ma note finale pour le quiz d\'histoire ne correspond pas à mes réponses correctes.',
+              category: 'Notes',
+              priority: 'medium',
+              status: 'in_progress',
+              createdAt: '2024-10-13 14:20',
+              responses: [
+                { date: '2024-10-13 15:00', text: 'Nous examinons votre cas. Merci de votre patience.' }
+              ]
+            },
+            {
+              id: 3,
+              student: 'Amine Sassi',
+              email: 'amine@example.com',
+              subject: 'Question sur l\'abonnement',
+              message: 'Comment puis-je annuler mon abonnement premium ?',
+              category: 'Abonnement',
+              priority: 'low',
+              status: 'resolved',
+              createdAt: '2024-10-12 09:15',
+              responses: [
+                { date: '2024-10-12 10:30', text: 'Vous pouvez annuler depuis votre profil > Paramètres > Abonnement.' }
+              ]
+            }
+          ]);
+        }
+      } catch (err) {
+        console.error('Error fetching reclamations:', err);
+        setError('Erreur lors du chargement des réclamations');
+        // Keep fallback data on error
+        setReclamations([
+          {
+            id: 1,
+            student: 'Démonstration',
+            email: 'demo@example.com',
+            subject: 'Fonctionnalité en développement',
+            message: 'Les données de démonstration sont affichées car l\'API backend n\'est pas encore disponible.',
+            category: 'Système',
+            priority: 'medium',
+            status: 'pending',
+            createdAt: new Date().toISOString().split('T')[0],
+            responses: []
+          }
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReclamations();
+  }, []);
 
   const filteredReclamations = reclamations.filter(rec => {
     const matchesSearch = rec.student.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -89,43 +122,74 @@ export default function ListReclamation() {
   const inProgressCount = reclamations.filter(r => r.status === 'in_progress').length;
   const resolvedCount = reclamations.filter(r => r.status === 'resolved').length;
 
-  const handleSendResponse = () => {
-    if (responseText.trim()) {
-      // Mettre à jour la réclamation avec la nouvelle réponse
-      const updatedReclamations = reclamations.map(rec => {
-        if (rec.id === selectedReclamation.id) {
-          const newResponse = {
-            date: new Date().toLocaleString('fr-FR'),
-            text: responseText
-          };
-          return {
-            ...rec,
-            responses: [...rec.responses, newResponse],
-            status: rec.status === 'pending' ? 'in_progress' : rec.status
-          };
-        }
-        return rec;
+  // Function to send response to reclamation
+  const handleSendResponse = async () => {
+    if (!responseText.trim() || !selectedReclamation) return;
+    
+    try {
+      setError(null);
+      
+      // Try to send response via API
+      const responseData = {
+        reclamationId: selectedReclamation.id,
+        response: responseText.trim(),
+        sentAt: new Date().toISOString()
+      };
+      
+      await adminService.sendReclamationResponse(responseData).catch(() => {
+        // Fallback to local update if API not available
+        console.log('API not available, updating locally');
+        setReclamations(reclamations.map(rec =>
+          rec.id === selectedReclamation.id
+            ? {
+                ...rec,
+                responses: [
+                  ...rec.responses,
+                  { date: new Date().toISOString().split('T')[0], text: responseText.trim() }
+                ],
+                status: 'in_progress'
+              }
+            : rec
+        ));
+        return { success: true };
       });
-
-      setReclamations(updatedReclamations);
+      
+      // Clear response and close modal
       setResponseText('');
+      setSelectedReclamation(null);
+      
+    } catch (err) {
+      console.error('Error sending response:', err);
+      setError('Erreur lors de l\'envoi de la réponse');
     }
   };
 
-  const handleMarkAsResolved = () => {
-    const updatedReclamations = reclamations.map(rec => {
-      if (rec.id === selectedReclamation.id) {
-        return {
-          ...rec,
-          status: 'resolved'
-        };
-      }
-      return rec;
-    });
-
-    setReclamations(updatedReclamations);
-    setSelectedReclamation(null);
-    setResponseText('');
+  // Function to mark reclamation as resolved
+  const handleMarkAsResolved = async () => {
+    if (!selectedReclamation) return;
+    
+    try {
+      setError(null);
+      
+      // Try to update status via API
+      await adminService.updateReclamationStatus(selectedReclamation.id, 'resolved').catch(() => {
+        // Fallback to local update if API not available
+        console.log('API not available, updating locally');
+        setReclamations(reclamations.map(rec =>
+          rec.id === selectedReclamation.id
+            ? { ...rec, status: 'resolved' }
+            : rec
+        ));
+        return { success: true };
+      });
+      
+      // Close modal
+      setSelectedReclamation(null);
+      
+    } catch (err) {
+      console.error('Error marking as resolved:', err);
+      setError('Erreur lors de la résolution de la réclamation');
+    }
   };
 
   const ReclamationDetailModal = ({ reclamation, onClose }) => {
@@ -258,6 +322,30 @@ export default function ListReclamation() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {/* Feature Not Implemented Notice */}
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-6 mb-8">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <Construction className="h-6 w-6 text-amber-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-amber-800">
+                Fonctionnalité en Développement
+              </h3>
+              <div className="mt-2 text-sm text-amber-700">
+                <p>
+                  La gestion des réclamations est en cours de développement. Les endpoints backend
+                  ne sont pas encore implémentés. Les données affichées sont des données de démonstration statiques.
+                </p>
+                <p className="mt-2">
+                  <strong>Prochaines étapes :</strong> Création des endpoints API pour la gestion des réclamations
+                  côté backend, puis intégration complète dans cette interface.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between">

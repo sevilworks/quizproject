@@ -133,6 +133,58 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
         }
     }
 
+    @PutMapping("/questions/{questionId}")
+    public ResponseEntity<?> updateQuestion(@PathVariable Integer questionId, @RequestBody Question question, Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            Integer professorId = getProfessorId(username);
+            
+            Question updatedQuestion = quizService.updateQuestion(questionId, question, professorId);
+            return ResponseEntity.ok(updatedQuestion);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/questions/{questionId}")
+    public ResponseEntity<?> deleteQuestion(@PathVariable Integer questionId, Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            Integer professorId = getProfessorId(username);
+            
+            quizService.deleteQuestion(questionId, professorId);
+            return ResponseEntity.ok(Map.of("message", "Question deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/responses/{responseId}")
+    public ResponseEntity<?> updateResponse(@PathVariable Integer responseId, @RequestBody Response response, Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            Integer professorId = getProfessorId(username);
+            
+            Response updatedResponse = quizService.updateResponse(responseId, response, professorId);
+            return ResponseEntity.ok(updatedResponse);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/responses/{responseId}")
+    public ResponseEntity<?> deleteResponse(@PathVariable Integer responseId, Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            Integer professorId = getProfessorId(username);
+            
+            quizService.deleteResponse(responseId, professorId);
+            return ResponseEntity.ok(Map.of("message", "Response deleted successfully"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/{quizId}/participations")
     public ResponseEntity<?> getQuizParticipations(@PathVariable Integer quizId, Authentication authentication) {
         try {
@@ -140,27 +192,10 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
             Integer professorId = getProfessorId(username);
             
             List<Participation> participations = quizService.getQuizParticipations(quizId, professorId);
-            // Map to DTOs to avoid returning JPA entities (prevents Hibernate proxy serialization issues)
-            java.util.List<ParticipationDto> dtos = new java.util.ArrayList<>();
-            for (Participation p : participations) {
-                ParticipationDto dto = new ParticipationDto();
-                dto.setId(p.getId());
-                dto.setScore(p.getScore());
-                dto.setCreatedAt(p.getCreatedAt());
-                dto.setUserId(p.getUserId());
-                dto.setGuestId(p.getGuestId());
-                // Removed studentId field as it's no longer used
-                // fetch quiz summary via service to avoid lazy-loading proxies
-                Quiz q = quizService.getQuizById(p.getQuizId());
-                if (q != null) {
-                    ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();
-                    qs.setId(q.getId());
-                    qs.setTitle(q.getTitle());
-                    qs.setCode(q.getCode());
-                    dto.setQuiz(qs);
-                }
-                dtos.add(dto);
-            }
+            // Map to DTOs using the fromEntity method which includes user/guest names
+            List<ParticipationDto> dtos = participations.stream()
+                .map(ParticipationDto::fromEntity)
+                .collect(Collectors.toList());
 
             return ResponseEntity.ok(dtos);
         } catch (Exception e) {
@@ -196,7 +231,7 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
             dto.setCreatedAt(participation.getCreatedAt());
             dto.setUserId(participation.getUserId());
             dto.setGuestId(participation.getGuestId());
-            // Removed studentId field as it's no longer used
+            dto.setStudentResponses(participation.getStudentResponses());
             Quiz q = quizService.getQuizById(participation.getQuizId());
             if (q != null) {
                 ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();
@@ -256,7 +291,7 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
             dto.setCreatedAt(participation.getCreatedAt());
             dto.setUserId(participation.getUserId());
             dto.setGuestId(participation.getGuestId());
-            // Removed studentId field as it's no longer used
+            dto.setStudentResponses(participation.getStudentResponses());
             Quiz q = quizService.getQuizById(participation.getQuizId());
             if (q != null) {
                 ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();
@@ -317,7 +352,7 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
             dto.setCreatedAt(participation.getCreatedAt());
             dto.setUserId(participation.getUserId());
             dto.setGuestId(participation.getGuestId());
-            // Removed studentId field as it's no longer used
+            dto.setStudentResponses(participation.getStudentResponses());
             Quiz q = quizService.getQuizById(participation.getQuizId());
             if (q != null) {
                 ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();
@@ -346,7 +381,7 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
                 dto.setCreatedAt(p.getCreatedAt());
                 dto.setUserId(p.getUserId());
                 dto.setGuestId(p.getGuestId());
-                // Removed studentId field as it's no longer used
+                dto.setStudentResponses(p.getStudentResponses());
                 Quiz q = quizService.getQuizById(p.getQuizId());
                 if (q != null) {
                     ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();

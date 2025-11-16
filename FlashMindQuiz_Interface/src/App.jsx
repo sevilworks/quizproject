@@ -20,6 +20,7 @@ import Paiement from './pages/abonnement/paiement';
 import QuizReport from "./pages/Quizzes/QuizReport";
 import DetailQuiz from "./pages/Quizzes/DetailQuiz";
 import AddQuiz from "./pages/Quizzes/AddQuiz";
+import EditQuiz from "./pages/Quizzes/EditQuiz";
 
 // Pages Admin 
 import AdminLayout from './pages/admin/AdminLayout'; // À créer
@@ -90,6 +91,7 @@ function App() {
                 <Route path="quiz/add" element={<AddQuiz />} />
                 <Route path="quiz/:id/report" element={<QuizReport />} />
                 <Route path="quiz/:id/details" element={<DetailQuiz />} />
+                <Route path="quiz/:id/edit" element={<EditQuiz />} />
               </Routes>
             </ProfLayout>
           </ProtectedRoute>

@@ -13,6 +13,8 @@ export default function TableauDeBordProfesseur() {
   });
   const navigate = useNavigate();
   const [quizzes, setQuizzes] = useState([]);
+  const [filteredQuizzes, setFilteredQuizzes] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [topStudents, setTopStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,7 +26,7 @@ export default function TableauDeBordProfesseur() {
 
         // Fetch quizzes
         const quizzesData = await quizService.getMyQuizzes();
-        setQuizzes(quizzesData.map(quiz => ({
+        const mappedQuizzes = quizzesData.map(quiz => ({
           id: quiz.id,
           name: quiz.title,
           icon: '📚',
@@ -32,7 +34,9 @@ export default function TableauDeBordProfesseur() {
           questions: quiz.questions?.length || 0,
           participants: [], // We'll calculate this from participations
           color: 'bg-[#624BFF]'
-        })));
+        }));
+        setQuizzes(mappedQuizzes);
+        setFilteredQuizzes(mappedQuizzes);
 
         // Calculate stats from quizzes and participations
         let totalParticipations = 0;
@@ -113,6 +117,47 @@ export default function TableauDeBordProfesseur() {
 
     fetchData();
   }, []);
+
+  // Handle search functionality
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredQuizzes(quizzes);
+    } else {
+      const filtered = quizzes.filter(quiz =>
+        quiz.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredQuizzes(filtered);
+    }
+  }, [searchQuery, quizzes]);
+
+  const handleSearchChange = (e) => {
+    setSearchQuery(e.target.value);
+  };
+
+  const handleDeleteQuiz = async (quizId) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce quiz ? Cette action est irréversible.')) {
+      try {
+        await quizService.deleteQuiz(quizId);
+        // Reload quizzes after deletion
+        const quizzesData = await quizService.getMyQuizzes();
+        const mappedQuizzes = quizzesData.map(quiz => ({
+          id: quiz.id,
+          name: quiz.title,
+          icon: '📚',
+          timing: `${quiz.duration}min`,
+          questions: quiz.questions?.length || 0,
+          participants: [],
+          color: 'bg-[#624BFF]'
+        }));
+        setQuizzes(mappedQuizzes);
+        setFilteredQuizzes(mappedQuizzes);
+        alert('Quiz supprimé avec succès!');
+      } catch (error) {
+        console.error('Error deleting quiz:', error);
+        alert('Erreur lors de la suppression du quiz');
+      }
+    }
+  };
 
   if (loading) {
     return (
@@ -231,12 +276,18 @@ export default function TableauDeBordProfesseur() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-gray-900">Liste des Quiz</h2>
             <div className="flex items-center gap-3">
-              <input 
-                type="text" 
-                placeholder="Rechercher" 
-                className="pl-4 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#624BFF]"
+              <input
+                type="text"
+                placeholder="Rechercher un quiz..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="pl-4 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#624BFF] w-64"
               />
-              <button className="p-2 bg-[#624BFF] text-white rounded-xl hover:bg-[#513BDB] transition-all">
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-2 bg-[#624BFF] text-white rounded-xl hover:bg-[#513BDB] transition-all"
+                title="Effacer la recherche"
+              >
                 <Search className="w-5 h-5"/>
               </button>
             </div>
@@ -254,7 +305,14 @@ export default function TableauDeBordProfesseur() {
       </tr>
     </thead>
     <tbody>
-      {quizzes.map((quiz) => (
+      {filteredQuizzes.length === 0 ? (
+        <tr>
+          <td colSpan="5" className="py-8 text-center text-gray-500">
+            {searchQuery ? 'Aucun quiz trouvé pour cette recherche' : 'Aucun quiz disponible'}
+          </td>
+        </tr>
+      ) : (
+        filteredQuizzes.map((quiz) => (
         <tr key={quiz.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
           <td className="py-4 px-4 flex items-center gap-3">
             <div className={`w-10 h-10 ${quiz.color} rounded-xl flex items-center justify-center text-white text-xl shadow-md`}>
@@ -281,11 +339,19 @@ export default function TableauDeBordProfesseur() {
   <Eye className="w-5 h-5 text-gray-600"/>
 </button>
 
-            <button className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
+            <button
+              onClick={() => navigate(`/professor/quiz/${quiz.id}/edit`)}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+              title="Modifier le quiz"
+            >
               <Edit className="w-5 h-5 text-gray-600"/>
             </button>
-            <button className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-              <Trash2 className="w-5 h-5 text-gray-600"/>
+            <button
+              onClick={() => handleDeleteQuiz(quiz.id)}
+              className="p-2 hover:bg-red-100 rounded-xl transition-colors"
+              title="Supprimer le quiz"
+            >
+              <Trash2 className="w-5 h-5 text-red-600"/>
             </button>
             <button
   onClick={() => navigate(`/professor/quiz/${quiz.id}/report`)}
@@ -296,7 +362,8 @@ export default function TableauDeBordProfesseur() {
 
           </td>
         </tr>
-      ))}
+        ))
+      )}
     </tbody>
   </table>
 
