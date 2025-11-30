@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, Plus, Check, Clock, Hash } from 'lucide-react';
 import { quizService } from '../../services/quizService';
+import { useNotification } from '../../components/Notification';
 
 export default function AddQuizTemplate() {
   const [quizName, setQuizName] = useState('');
@@ -11,6 +12,9 @@ export default function AddQuizTemplate() {
     { id: 1, text: '', options: ['', '', '', ''], correctOption: 0 }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
 
   const addQuestion = () => {
     setQuestions([...questions, { id: questions.length + 1, text: '', options: ['', '', '', ''], correctOption: 0 }]);
@@ -25,28 +29,35 @@ export default function AddQuizTemplate() {
 
   const handleSubmitQuiz = async () => {
     if (!quizName.trim()) {
-      alert('Le nom du quiz est requis');
+      showError('Le nom du quiz est requis', 'Nom requis');
       return;
     }
 
     if (questions.length === 0 || questions.some(q => !q.text.trim())) {
-      alert('Toutes les questions doivent avoir un texte');
+      showError('Toutes les questions doivent avoir un texte', 'Questions incomplètes');
       return;
     }
 
     if (questions.some(q => q.options.filter(opt => opt.trim()).length < 2)) {
-      alert('Chaque question doit avoir au moins 2 options');
+      showError('Chaque question doit avoir au moins 2 options', 'Options insuffisantes');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
+      // Convert frontend status to backend status
+      let backendStatus = 'DRAFT';
+      if (status === 'actif') backendStatus = 'ACTIVE';
+      else if (status === 'brouillon') backendStatus = 'DRAFT';
+      else if (status === 'archive') backendStatus = 'ARCHIVED';
+
       // Create quiz object
       const quizData = {
         title: quizName,
         description: quizDescription,
-        duration: parseInt(duration.replace('min', ''))
+        duration: parseInt(duration.replace('min', '')),
+        status: backendStatus
       };
 
       // Create quiz first
@@ -64,7 +75,7 @@ export default function AddQuizTemplate() {
            for (let i = 0; i < question.options.length; i++) {
              if (question.options[i].trim()) {
                const responseData = {
-                 response_text: question.options[i],
+                 responseText: question.options[i],
                  isCorrect: i === question.correctOption
                };
                await quizService.addResponse(createdQuestion.id, responseData);
@@ -73,22 +84,26 @@ export default function AddQuizTemplate() {
         }
       }
 
-      alert('Quiz créé avec succès!');
+      showSuccess('Quiz créé avec succès!', 'Création réussie');
       // Reset form or redirect
-      setQuizName('');
-      setQuizDescription('');
-      setQuestions([{ id: 1, text: '', options: ['', '', '', ''], correctOption: 0 }]);
+      setTimeout(() => {
+        setQuizName('');
+        setQuizDescription('');
+        setQuestions([{ id: 1, text: '', options: ['', '', '', ''], correctOption: 0 }]);
+      }, 1500);
 
     } catch (error) {
       console.error('Erreur lors de la création du quiz:', error);
-      alert('Erreur lors de la création du quiz: ' + (error.response?.data?.error || error.message));
+      showError('Erreur lors de la création du quiz: ' + (error.response?.data?.error || error.message), 'Erreur de création');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+    <>
+      <NotificationComponent />
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#624BFF] to-[#7C5FFF] text-white p-8 shadow-lg">
         <h1 className="text-3xl font-bold tracking-tight">Ajouter un Quiz</h1>
@@ -289,5 +304,6 @@ export default function AddQuizTemplate() {
         </div>
       </div>
     </div>
+    </>
   );
 }

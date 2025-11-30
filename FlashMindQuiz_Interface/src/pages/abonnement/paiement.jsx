@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Bell, CreditCard, Lock, CheckCircle, ArrowLeft, Calendar, Shield, Crown } from 'lucide-react';
+import { useNotification } from '../../components/Notification';
 
 export default function PagePaiement() {
-  const navigate = useNavigate(); // pour navigation
+  const navigate = useNavigate();
+  const location = useLocation();
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [formData, setFormData] = useState({
     cardNumber: '',
@@ -14,14 +16,37 @@ export default function PagePaiement() {
     country: 'Tunisie',
   });
 
-  const premiumPlan = {
+  // Get selected plan from navigation state or use default fallback
+  const selectedPlan = location.state?.selectedPlan || {
     id: 'premium',
-    name: 'Premium Pro',
-    price: 49900, 
+    name: 'Plan Premium',
+    price: 29.99,
+    originalPrice: 49.99,
     duration: 'mois',
-    features: ['Étudiants illimités', 'Quizzes illimités', 'Sécurité renforcée', 'Génération de quiz par IA', 'Statistiques avancées'],
-    color: 'from-[#6B4FFF] to-[#8B6FFF]',
+    features: [
+      'Quiz illimités',
+      'Étudiants illimités', 
+      'Génération de quiz par IA',
+      'Statistiques avancées',
+      'Rapports détaillés',
+      'Support prioritaire 24/7'
+    ],
+    color: 'from-blue-500 to-blue-600',
+    popular: true
   };
+
+  // Convert price to millimes (assuming the price is in dollars and we need millimes)
+  const priceInMillimes = Math.round(selectedPlan.price * 1000);
+  
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
+  
+  useEffect(() => {
+    // If no plan was selected, redirect back to subscription page
+    if (!location.state?.selectedPlan) {
+      console.log('No plan selected, using default plan');
+    }
+  }, [location.state, navigate]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -30,7 +55,18 @@ export default function PagePaiement() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    alert('Paiement effectué avec succès ! Votre abonnement Premium Pro a été renouvelé.');
+    // Here you would normally process the payment with your backend
+    // For now, we'll show a success message with the real plan data
+    const totalAmount = Math.round(priceInMillimes * 1.19);
+    showSuccess(
+      `Votre abonnement ${selectedPlan.name} a été activé avec succès ! Montant payé: ${totalAmount} millimes`,
+      "Paiement effectué"
+    );
+    
+    // Redirect to subscription page or dashboard after successful payment
+    setTimeout(() => {
+      navigate('/professor/abonnement');
+    }, 2500);
   };
 
   const goBack = () => {
@@ -38,7 +74,9 @@ export default function PagePaiement() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <>
+      <NotificationComponent />
+      <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Navbar */}
      <div className="bg-[#624BFF] text-white px-8 py-6 flex items-center justify-between shadow-md"> 
         <div className="flex items-center gap-4">
@@ -239,26 +277,56 @@ export default function PagePaiement() {
               <div className="bg-white rounded-3xl shadow-xl p-8 sticky top-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Résumé de la commande</h2>
                 
-                <div className={`bg-gradient-to-br ${premiumPlan.color} rounded-2xl p-6 mb-6 text-white`}>
-                  <div className="flex items-center gap-3 mb-3">
+                <div className={`bg-gradient-to-br ${selectedPlan.color} rounded-2xl p-6 mb-6 text-white`}>
+                  <div className="flex items-center gap-3 mb-4">
                     <Crown className="w-8 h-8" />
-                    <h3 className="text-2xl font-bold">{premiumPlan.name}</h3>
+                    <div>
+                      <h3 className="text-2xl font-bold">{selectedPlan.name}</h3>
+                      {selectedPlan.popular && (
+                        <span className="bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-bold">
+                          ⭐ Plus populaire
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-white text-opacity-90 text-sm">Abonnement mensuel</p>
+                  <p className="text-white text-opacity-90 text-sm">
+                    Abonnement {selectedPlan.duration} - ${selectedPlan.price}/{selectedPlan.duration}
+                  </p>
+                  {selectedPlan.originalPrice && selectedPlan.originalPrice > selectedPlan.price && (
+                    <p className="text-white text-opacity-80 text-xs mt-2">
+                      <span className="line-through">${selectedPlan.originalPrice}</span> 
+                      <span className="ml-2 bg-green-400 text-green-900 px-2 py-1 rounded-full text-xs font-bold">
+                        Économisez ${selectedPlan.originalPrice - selectedPlan.price}
+                      </span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Plan Features */}
+                <div className="mb-6">
+                  <h4 className="font-bold text-gray-900 mb-3">Ce qui est inclus :</h4>
+                  <ul className="space-y-2">
+                    {selectedPlan.features?.map((feature, index) => (
+                      <li key={index} className="flex items-center gap-2 text-sm text-gray-700">
+                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
 
                 <div className="space-y-4 mb-6">
                   <div className="flex justify-between text-gray-700">
                     <span>Sous-total</span>
-                    <span className="font-semibold">{premiumPlan.price} millimes</span>
+                    <span className="font-semibold">{priceInMillimes} millimes</span>
                   </div>
                   <div className="flex justify-between text-gray-700">
                     <span>Taxe (TVA 19%)</span>
-                    <span className="font-semibold">{Math.round(premiumPlan.price * 0.19)} millimes</span>
+                    <span className="font-semibold">{Math.round(priceInMillimes * 0.19)} millimes</span>
                   </div>
                   <div className="border-t-2 border-gray-200 pt-4 flex justify-between text-gray-900">
                     <span className="text-xl font-bold">Total</span>
-                    <span className="text-xl font-bold">{Math.round(premiumPlan.price * 1.19)} millimes</span>
+                    <span className="text-xl font-bold">{Math.round(priceInMillimes * 1.19)} millimes</span>
                   </div>
                 </div>
 
@@ -290,5 +358,6 @@ export default function PagePaiement() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -16,8 +16,7 @@ export default function ListAbonnement() {
   
   // État pour le formulaire d'ajout
   const [newSubscription, setNewSubscription] = useState({
-    professor: '',
-    email: '',
+    professorId: '',
     plan: 'Basic',
     price: 19.99,
     status: 'active',
@@ -26,6 +25,10 @@ export default function ListAbonnement() {
     endDate: '',
     paymentMethod: 'Carte Bancaire'
   });
+
+  // État pour les professeurs gratuits
+  const [freeProfessors, setFreeProfessors] = useState([]);
+  const [loadingFreeProfessors, setLoadingFreeProfessors] = useState(false);
 
   // Fetch subscriptions data
   useEffect(() => {
@@ -103,6 +106,27 @@ export default function ListAbonnement() {
     'Diamond': 99.99
   };
 
+  // Fonction pour obtenir FREE professors
+  const fetchFreeProfessors = async () => {
+    try {
+      setLoadingFreeProfessors(true);
+      const freeProf = await adminService.getFreeProfessors();
+      setFreeProfessors(freeProf);
+    } catch (err) {
+      console.error('Error fetching free professors:', err);
+      setError('Erreur lors du chargement des professeurs gratuits');
+    } finally {
+      setLoadingFreeProfessors(false);
+    }
+  };
+
+  // Fonction pour ouvrir le formulaire et charger les FREE professors
+  const handleOpenAddForm = () => {
+    setShowAddForm(true);
+    setError(null);
+    fetchFreeProfessors();
+  };
+
   // Fonction pour obtenir la couleur du badge selon le plan
   const getPlanColor = (plan) => {
     switch (plan) {
@@ -122,11 +146,22 @@ export default function ListAbonnement() {
   const handleAddSubscription = async (e) => {
     e.preventDefault();
     
+    if (!newSubscription.professorId) {
+      setError('Veuillez sélectionner un professeur');
+      return;
+    }
+    
     try {
       const endDate = calculateEndDate(newSubscription.startDate, newSubscription.duration);
       
+      const selectedProfessor = freeProfessors.find(p => p.user_id === parseInt(newSubscription.professorId));
+      if (!selectedProfessor) {
+        setError('Professeur sélectionné invalide');
+        return;
+      }
+      
       const subscriptionData = {
-        professorEmail: newSubscription.email,
+        professorId: parseInt(newSubscription.professorId),
         planType: newSubscription.plan,
         price: parseFloat(newSubscription.price),
         startDate: newSubscription.startDate,
@@ -135,7 +170,7 @@ export default function ListAbonnement() {
         isActive: newSubscription.status === 'active'
       };
       
-      const createdSubscription = await adminService.createSubscription(subscriptionData);
+      await adminService.createSubscription(subscriptionData);
       
       // Refresh the subscriptions list
       const updatedSubscriptions = await adminService.getSubscriptions();
@@ -155,8 +190,7 @@ export default function ListAbonnement() {
       setSubscriptions(processedSubscriptions);
       setShowAddForm(false);
       setNewSubscription({
-        professor: '',
-        email: '',
+        professorId: '',
         plan: 'Basic',
         price: 19.99,
         status: 'active',
@@ -169,6 +203,21 @@ export default function ListAbonnement() {
       console.error('Error creating subscription:', err);
       setError('Erreur lors de la création de l\'abonnement');
     }
+  };
+
+  // Gestionnaire pour la sélection du professeur
+  const handleProfessorChange = (e) => {
+    const professorId = e.target.value;
+    const selectedProfessor = freeProfessors.find(p => p.user_id === parseInt(professorId));
+    
+    setNewSubscription(prev => ({
+      ...prev,
+      professorId: professorId,
+      professorName: selectedProfessor ?
+        ((selectedProfessor.first_name && selectedProfessor.last_name)
+          ? `${selectedProfessor.first_name} ${selectedProfessor.last_name}`.trim()
+          : `Professeur ${selectedProfessor.user_id}`) : ''
+    }));
   };
 
   // Mise à jour des champs du formulaire
@@ -262,174 +311,6 @@ export default function ListAbonnement() {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  // Dynamic report data state
-  const [reportData, setReportData] = useState({
-    monthlyData: [],
-    subjectDistribution: [],
-    weeklyParticipation: [],
-    successRateBySubject: [],
-    isLoading: true
-  });
-
-  // Fetch report data from API
-  useEffect(() => {
-    const fetchReportData = async () => {
-      try {
-        // Fetch quiz and subscription data for dynamic reporting
-        const [quizzes, subscriptions] = await Promise.all([
-          adminService.getQuizzes().catch(() => []),
-          adminService.getSubscriptions().catch(() => [])
-        ]);
-
-        // Process data for charts
-        const currentMonth = new Date().getMonth();
-        const monthlyData = Array(12).fill(0).map((_, index) => {
-          // This would be calculated based on actual quiz creation dates
-          // For now, we'll generate some sample data based on current subscriptions
-          return subscriptions.length * (index + 1) * Math.random();
-        });
-
-        const subjectDistribution = [
-          { subject: 'Mathématiques', value: Math.max(10, quizzes.length * 0.3), color: '#624BFF' },
-          { subject: 'Sciences', value: Math.max(8, quizzes.length * 0.25), color: '#10B981' },
-          { subject: 'Histoire', value: Math.max(6, quizzes.length * 0.2), color: '#F59E0B' },
-          { subject: 'Français', value: Math.max(4, quizzes.length * 0.15), color: '#EF4444' },
-          { subject: 'Autres', value: Math.max(2, quizzes.length * 0.1), color: '#6B7280' }
-        ];
-
-        const weeklyParticipation = Array(7).fill(0).map(() =>
-          Math.floor(subscriptions.length * (0.8 + Math.random() * 0.4))
-        );
-
-        const successRateBySubject = subjectDistribution.map(subject => ({
-          subject: subject.subject,
-          rate: Math.floor(60 + Math.random() * 30) // Random success rate between 60-90%
-        }));
-
-        setReportData({
-          monthlyData,
-          subjectDistribution,
-          weeklyParticipation,
-          successRateBySubject,
-          isLoading: false
-        });
-      } catch (error) {
-        console.error('Error fetching report data:', error);
-        // Fallback to some basic data
-        setReportData({
-          monthlyData: Array(12).fill(0),
-          subjectDistribution: [
-            { subject: 'Mathématiques', value: 10, color: '#624BFF' },
-            { subject: 'Sciences', value: 8, color: '#10B981' },
-            { subject: 'Histoire', value: 6, color: '#F59E0B' },
-            { subject: 'Français', value: 4, color: '#EF4444' },
-            { subject: 'Autres', value: 2, color: '#6B7280' }
-          ],
-          weeklyParticipation: Array(7).fill(0),
-          successRateBySubject: [
-            { subject: 'Mathématiques', rate: 75 },
-            { subject: 'Sciences', rate: 70 },
-            { subject: 'Histoire', rate: 65 },
-            { subject: 'Français', rate: 68 }
-          ],
-          isLoading: false
-        });
-      }
-    };
-
-    if (showReport) {
-      fetchReportData();
-    }
-  }, [showReport]);
-
-  // Composants graphiques pour le rapport
-  const BarChart = ({ data, title, color = '#624BFF' }) => (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-medium text-gray-700 mb-4">{title}</h4>
-      <div className="flex items-end justify-between h-32 gap-1">
-        {data.map((value, index) => (
-          <div key={index} className="flex flex-col items-center flex-1">
-            <div
-              className="w-full rounded-t transition-all duration-300 hover:opacity-80"
-              style={{
-                height: `${(value / Math.max(...data)) * 100}%`,
-                backgroundColor: color,
-                minHeight: '4px'
-              }}
-            />
-            <span className="text-xs text-gray-500 mt-1">{index + 1}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-  const PieChartComponent = ({ data, title }) => (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <h4 className="text-sm font-medium text-gray-700 mb-4">{title}</h4>
-      <div className="flex flex-col items-center">
-        <div className="relative w-32 h-32 mb-4">
-          <svg viewBox="0 0 32 32" className="w-32 h-32 transform -rotate-90">
-            {data.reduce((acc, item, index) => {
-              const previousValue = acc.reduce((sum, i) => sum + i.value, 0);
-              const circumference = 2 * Math.PI * 15.9155;
-              const strokeDasharray = `${(item.value / 100) * circumference} ${circumference}`;
-              const strokeDashoffset = -((previousValue / 100) * circumference);
-              
-              acc.push(
-                <circle
-                  key={index}
-                  cx="16"
-                  cy="16"
-                  r="15.9155"
-                  fill="transparent"
-                  stroke={item.color}
-                  strokeWidth="2"
-                  strokeDasharray={strokeDasharray}
-                  strokeDashoffset={strokeDashoffset}
-                  className="transition-all duration-500"
-                />
-              );
-              return acc;
-            }, [])}
-          </svg>
-        </div>
-        <div className="space-y-2 w-full">
-          {data.map((item, index) => (
-            <div key={index} className="flex items-center justify-between text-xs">
-              <div className="flex items-center">
-                <div 
-                  className="w-3 h-3 rounded-sm mr-2"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="text-gray-600">{item.subject}</span>
-              </div>
-              <span className="font-medium text-gray-900">{item.value}%</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const ProgressBar = ({ label, value, max = 100, color = '#624BFF' }) => (
-    <div className="mb-3">
-      <div className="flex justify-between text-sm mb-1">
-        <span className="text-gray-600">{label}</span>
-        <span className="font-medium text-gray-900">{value}%</span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
-        <div
-          className="h-2 rounded-full transition-all duration-500"
-          style={{
-            width: `${(value / max) * 100}%`,
-            backgroundColor: color
-          }}
-        />
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-[#624BFF] text-white shadow-sm">
@@ -440,8 +321,8 @@ export default function ListAbonnement() {
               <p className="text-purple-100 text-sm mt-1">Surveiller et gérer les abonnements des professeurs</p>
             </div>
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowAddForm(true)}
+              <button
+                onClick={handleOpenAddForm}
                 className="px-6 py-3 bg-white text-[#624BFF] font-medium rounded-lg hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow-md"
               >
                + Ajouter Abonnement
@@ -474,33 +355,39 @@ export default function ListAbonnement() {
             <form onSubmit={handleAddSubscription} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Professeur *
+                  Professeur Gratuit (FREE) *
                 </label>
-                <input
-                  type="text"
-                  name="professor"
-                  value={newSubscription.professor}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Nom du professeur"
-                />
+                {loadingFreeProfessors ? (
+                  <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 flex items-center justify-center">
+                    <div className="flex items-center space-x-2">
+                      <Loader className="w-4 h-4 animate-spin text-purple-600" />
+                      <span className="text-gray-600">Chargement des professeurs...</span>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    name="professorId"
+                    value={newSubscription.professorId}
+                    onChange={handleProfessorChange}
+                    required
+                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    <option value="">-- Sélectionner un professeur gratuit --</option>
+                    {freeProfessors.map(professor => {
+                      const fullName = (professor.first_name && professor.last_name)
+                        ? `${professor.first_name} ${professor.last_name}`.trim()
+                        : `Professeur ${professor.user_id}`;
+                      
+                      return (
+                        <option key={professor.user_id} value={professor.user_id}>
+                          {fullName}
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  name="email"
-                  value={newSubscription.email}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="email@exemple.com"
-                />
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -616,14 +503,33 @@ export default function ListAbonnement() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowAddForm(false)}
+                  onClick={() => {
+                    setShowAddForm(false);
+                    setNewSubscription({
+                      professorId: '',
+                      plan: 'Basic',
+                      price: 19.99,
+                      status: 'active',
+                      startDate: '',
+                      duration: '1',
+                      endDate: '',
+                      paymentMethod: 'Carte Bancaire'
+                    });
+                    setFreeProfessors([]);
+                    setError(null);
+                  }}
                   className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   Annuler
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                  disabled={!newSubscription.professorId}
+                  className={`flex-1 px-4 py-3 font-medium rounded-lg transition-colors ${
+                    !newSubscription.professorId
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-purple-600 text-white hover:bg-purple-700'
+                  }`}
                 >
                   Ajouter l'Abonnement
                 </button>
@@ -650,7 +556,7 @@ export default function ListAbonnement() {
             <div className="p-6 space-y-6">
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-r from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl">
-                  {selectedSubscription.professor.charAt(5)}
+                  {selectedSubscription.professor.charAt(0)}
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">{selectedSubscription.professor}</h3>
@@ -761,13 +667,22 @@ export default function ListAbonnement() {
       )}
 
       <main className="max-w-7xl mx-auto px-6 py-8">
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-600 mr-2" />
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
         {showReport ? (
           // RAPPORT MENSUEL AVEC GRAPHIQUES
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-md p-6">
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-xl font-bold text-gray-800">Rapport Mensuel - Statistiques Quiz</h2>
-                <span className="text-sm text-gray-500">Mois de Octobre 2025</span>
+                <span className="text-sm text-gray-500">Mois de Novembre 2025</span>
               </div>
               <p className="text-gray-600">Analyse des performances et participation aux quiz ce mois-ci</p>
             </div>
@@ -795,360 +710,6 @@ export default function ListAbonnement() {
                 <div className="text-orange-600 text-sm font-medium">Temps Moyen</div>
                 <div className="text-2xl font-bold text-orange-700 mt-2">12min</div>
                 <div className="text-gray-600 text-sm mt-1">stable</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Participation Hebdomadaire */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-lg font-semibold text-gray-800">Participation Hebdomadaire</h4>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="w-3 h-3 bg-[#624BFF] rounded-full"></div>
-                    <span>Semaine en cours</span>
-                  </div>
-                </div>
-                
-                <div className="flex items-end justify-between h-48 gap-3 px-2">
-                  {reportData.isLoading ? (
-                    <div className="flex items-center justify-center h-48">
-                      <div className="flex items-center space-x-2">
-                        <Loader className="w-6 h-6 animate-spin text-purple-600" />
-                        <span className="text-gray-600">Chargement des données...</span>
-                      </div>
-                    </div>
-                  ) : (
-                    (() => {
-                      const days = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-                      const fullDays = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
-                      const maxValue = Math.max(...reportData.weeklyParticipation, 1);
-                      
-                      return reportData.weeklyParticipation.map((value, index) => ({
-                        day: days[index],
-                        label: fullDays[index],
-                        value: value || 0
-                      })).map((item, index) => {
-                        const height = (item.value / maxValue) * 100;
-                        
-                        return (
-                          <div key={index} className="flex flex-col items-center flex-1 group relative">
-                            <div className="relative w-full flex justify-center">
-                              <div
-                                className="w-10 rounded-t-lg transition-all duration-500 hover:shadow-lg group-hover:scale-105 relative"
-                                style={{
-                                  height: `${height}%`,
-                                  minHeight: '20px',
-                                  background: `linear-gradient(to top, #624BFF, #8B7AFF)`,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap">
-                                  {item.label}: {item.value} participants
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <span className="text-sm font-medium text-gray-600 mt-3">{item.day}</span>
-                            
-                            <span className="text-xs text-gray-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              {item.value}
-                            </span>
-                          </div>
-                        );
-                      });
-                    })()
-                  )}
-                </div>
-                
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-semibold">Total semaine: 1,158 participants</span>
-                  </div>
-                  <span className="text-green-600 text-sm font-medium flex items-center">
-                    <TrendingUp className="w-4 h-4 mr-1" />
-                    +15% vs semaine dernière
-                  </span>
-                </div>
-              </div>
-
-              {/* Répartition par Matière */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-lg font-semibold text-gray-800">Répartition par Matière</h4>
-                  <div className="text-sm text-gray-500">
-                    Total: 100 quiz
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="relative w-48 h-48">
-                    <svg viewBox="0 0 32 32" className="w-48 h-48 transform -rotate-90">
-                      {[
-                        { value: 35, color: '#624BFF' },
-                        { value: 25, color: '#10B981' },
-                        { value: 20, color: '#F59E0B' },
-                        { value: 15, color: '#EF4444' },
-                        { value: 5, color: '#6B7280' }
-                      ].reduce((acc, item, index) => {
-                        const previousValue = acc.reduce((sum, i) => sum + i.value, 0);
-                        const circumference = 2 * Math.PI * 15.9155;
-                        const strokeDasharray = `${(item.value / 100) * circumference} ${circumference}`;
-                        const strokeDashoffset = -((previousValue / 100) * circumference);
-                        
-                        acc.push(
-                          <circle
-                            key={index}
-                            cx="16"
-                            cy="16"
-                            r="15.9155"
-                            fill="transparent"
-                            stroke={item.color}
-                            strokeWidth="3"
-                            strokeDasharray={strokeDasharray}
-                            strokeDashoffset={strokeDashoffset}
-                            className="transition-all duration-700"
-                          />
-                        );
-                        return acc;
-                      }, [])}
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-800">100%</div>
-                        <div className="text-xs text-gray-500">Total</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex-1 ml-6 space-y-4">
-                    {[
-                      { subject: 'Mathématiques', value: 35, color: '#624BFF' },
-                      { subject: 'Sciences', value: 25, color: '#10B981' },
-                      { subject: 'Histoire', value: 20, color: '#F59E0B' },
-                      { subject: 'Français', value: 15, color: '#EF4444' },
-                      { subject: 'Autres', value: 5, color: '#6B7280' }
-                    ].map((item, index) => (
-                      <div key={index} className="flex items-center justify-between group cursor-pointer">
-                        <div className="flex items-center">
-                          <div 
-                            className="w-4 h-4 rounded-full mr-3 transition-transform group-hover:scale-110"
-                            style={{ backgroundColor: item.color }}
-                          />
-                          <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-gray-900">{item.value}%</div>
-                          <div className="text-xs text-gray-500">
-                            {item.value} quiz
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Taux de Réussite par Matière */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-lg font-semibold text-gray-800">Taux de Réussite par Matière</h4>
-                  <div className="text-sm text-green-600 font-medium flex items-center">
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Moyenne: 76.5%
-                  </div>
-                </div>
-                <div className="space-y-5">
-                  {[
-                    { subject: 'Mathématiques', rate: 82 },
-                    { subject: 'Sciences', rate: 75 },
-                    { subject: 'Histoire', rate: 68 },
-                    { subject: 'Français', rate: 71 }
-                  ].map((item, index) => {
-                    const colors = ['#624BFF', '#10B981', '#F59E0B', '#EF4444'];
-                    const color = colors[index];
-                    return (
-                      <div key={index} className="group">
-                        <div className="flex justify-between items-center mb-2">
-                          <div className="flex items-center">
-                            <div 
-                              className="w-3 h-3 rounded-full mr-3 transition-transform group-hover:scale-125"
-                              style={{ backgroundColor: color }}
-                            />
-                            <span className="text-sm font-medium text-gray-700">{item.subject}</span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-lg font-bold text-gray-900 mr-2">{item.rate}%</span>
-                            {item.rate >= 80 ? (
-                              <TrendingUp className="w-4 h-4 text-green-500" />
-                            ) : item.rate >= 70 ? (
-                              <Clock className="w-4 h-4 text-yellow-500" />
-                            ) : (
-                              <XCircle className="w-4 h-4 text-red-500" />
-                            )}
-                          </div>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
-                          <div
-                            className="h-3 rounded-full transition-all duration-1000 ease-out group-hover:shadow-lg"
-                            style={{
-                              width: `${item.rate}%`,
-                              backgroundColor: color,
-                              background: `linear-gradient(90deg, ${color}, ${color}DD)`
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                  <div className="flex justify-between text-sm text-gray-500">
-                    <span>Performance globale</span>
-                    <span>Excellent en Mathématiques</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Évolution Mensuelle des Quiz */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-6">
-                  <h4 className="text-lg font-semibold text-gray-800">Évolution Mensuelle des Quiz</h4>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    <span>2024</span>
-                  </div>
-                </div>
-                
-                <div className="flex items-end justify-between h-48 gap-2 px-1">
-                  {[
-                    { month: 'J', value: 45, name: 'Janvier' },
-                    { month: 'F', value: 52, name: 'Février' },
-                    { month: 'M', value: 48, name: 'Mars' },
-                    { month: 'A', value: 67, name: 'Avril' },
-                    { month: 'M', value: 55, name: 'Mai' },
-                    { month: 'J', value: 60, name: 'Juin' },
-                    { month: 'J', value: 58, name: 'Juillet' },
-                    { month: 'A', value: 72, name: 'Août' },
-                    { month: 'S', value: 65, name: 'Septembre' },
-                    { month: 'O', value: 70, name: 'Octobre' },
-                    { month: 'N', value: 68, name: 'Novembre' },
-                    { month: 'D', value: 47, name: 'Décembre' }
-                  ].map((item, index) => {
-                    const maxValue = 72;
-                    const height = (item.value / maxValue) * 100;
-                    const isCurrentMonth = item.month === 'N';
-                    
-                    return (
-                      <div key={index} className="flex flex-col items-center flex-1 group relative">
-                        <div className="relative w-full flex justify-center">
-                          <div
-                            className={`w-7 rounded-t-lg transition-all duration-500 hover:shadow-lg group-hover:scale-105 ${
-                              isCurrentMonth ? 'ring-2 ring-green-400 ring-opacity-50' : ''
-                            }`}
-                            style={{
-                              height: `${height}%`,
-                              minHeight: '15px',
-                              background: `linear-gradient(to top, #10B981, #34D399)`,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 bg-gray-800 text-white text-xs px-2 py-1 rounded-lg whitespace-nowrap">
-                              {item.name}: {item.value} quiz
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <span className={`text-sm font-medium mt-3 ${
-                          isCurrentMonth ? 'text-green-600 font-bold' : 'text-gray-600'
-                        }`}>
-                          {item.month}
-                        </span>
-                        
-                        <span className="text-xs text-gray-500 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          {item.value}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
-                  <div className="text-sm text-gray-600">
-                    <span className="font-semibold">Total annuel: 707 quiz</span>
-                  </div>
-                  <span className="text-green-600 text-sm font-medium flex items-center">
-                    <TrendingUp className="w-4 h-4 mr-1" />
-                    +22% vs 2023
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quiz Populaires */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center">
-                  <Activity className="w-6 h-6 mr-3 text-purple-600" />
-                  <h3 className="text-xl font-bold text-gray-800">Quiz les Plus Populaires</h3>
-                </div>
-                <div className="text-sm text-gray-500">
-                  Classement par participation
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                {[
-                  { name: "Quiz de Mathématiques Avancées", participants: 284, growth: 12, rank: 1 },
-                  { name: "Histoire de France - Révolution", participants: 197, growth: 8, rank: 2 },
-                  { name: "Sciences Physiques - Mécanique", participants: 165, growth: 15, rank: 3 },
-                  { name: "Grammaire Française - Niveau Expert", participants: 142, growth: 5, rank: 4 },
-                  { name: "Géographie Mondiale - Capitales", participants: 128, growth: -2, rank: 5 }
-                ].map((quiz, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:shadow-md transition-all duration-300 group">
-                    <div className="flex items-center">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm mr-4 ${
-                        quiz.rank === 1 ? 'bg-yellow-500' :
-                        quiz.rank === 2 ? 'bg-gray-400' :
-                        quiz.rank === 3 ? 'bg-orange-500' : 'bg-purple-500'
-                      }`}>
-                        {quiz.rank}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-gray-800 group-hover:text-purple-600 transition-colors">
-                          {quiz.name}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
-                          Créé le 15 Nov 2024
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-purple-600">{quiz.participants}</div>
-                      <div className={`text-xs flex items-center justify-end ${
-                        quiz.growth > 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {quiz.growth > 0 ? (
-                          <TrendingUp className="w-3 h-3 mr-1" />
-                        ) : (
-                          <TrendingUp className="w-3 h-3 mr-1 transform rotate-180" />
-                        )}
-                        {Math.abs(quiz.growth)}% ce mois
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="mt-6 pt-4 border-t border-gray-100">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-500">
-                    Moyenne: 183 participants/quiz
-                  </span>
-                  <button className="text-purple-600 text-sm font-medium hover:text-purple-700 transition-colors flex items-center">
-                    Voir tous les quiz
-                    <TrendingUp className="w-4 h-4 ml-1" />
-                  </button>
-                </div>
               </div>
             </div>
           </div>
@@ -1282,7 +843,7 @@ export default function ListAbonnement() {
                         <td className="px-6 py-4">
                           <div className="flex items-center">
                             <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                              {sub.professor.charAt(5)}
+                              {sub.professor.charAt(0)}
                             </div>
                             <div className="ml-4">
                               <p className="text-sm font-medium text-gray-900">{sub.professor}</p>

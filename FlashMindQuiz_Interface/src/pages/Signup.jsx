@@ -23,28 +23,28 @@ export default function Signup() {
     });
   };
 
-  const handleSignup = async () => {
+const handleSignup = async () => {
     // Validation
-    if (!formData.username.trim() || !formData.email.trim() || !formData.password.trim() || 
+    if (!formData.username.trim() || !formData.email.trim() || !formData.password.trim() ||
         !formData.firstName.trim() || !formData.lastName.trim()) {
-      alert("Veuillez remplir tous les champs obligatoires !");
+      showError("Veuillez remplir tous les champs obligatoires !", "Champs requis");
       return;
     }
   
     if (formData.password !== formData.confirmPassword) {
-      alert("Les mots de passe ne correspondent pas !");
+      showError("Les mots de passe ne correspondent pas !", "Mots de passe différents");
       return;
     }
   
     if (formData.password.length < 8) {
-      alert("Le mot de passe doit contenir au moins 8 caractères !");
+      showError("Le mot de passe doit contenir au moins 8 caractères !", "Mot de passe trop court");
       return;
     }
 
     setLoading(true);
   
     try {
-      await authService.signup({
+      const response = await authService.signup({
         username: formData.username,
         email: formData.email,
         password: formData.password,
@@ -53,9 +53,18 @@ export default function Signup() {
         role: formData.role
       });
       
-      setSignupSuccess(true);
+      // Check if email verification is required based on new backend response
+      if (response.emailVerificationRequired || response.message?.includes('vérification') || response.message?.includes('vérifiez')) {
+        setSignupSuccess(true);
+      } else {
+        // Fallback: if no verification required, show success and redirect to login
+        showSuccess("Inscription réussie ! Vous pouvez maintenant vous connecter.", "Compte créé");
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 2000);
+      }
     } catch (error) {
-      alert(error.response?.data?.error || "Erreur lors de l'inscription");
+      showError(error.response?.data?.error || error.response?.data?.message || "Erreur lors de l'inscription", "Erreur d'inscription");
     } finally {
       setLoading(false);
     }
@@ -64,9 +73,9 @@ export default function Signup() {
   const handleResendVerification = async () => {
     try {
       await authService.resendVerificationEmail(formData.email);
-      alert("Email de vérification renvoyé avec succès !");
+      showSuccess("Email de vérification renvoyé avec succès !", "Email envoyé");
     } catch (error) {
-      alert(error.response?.data?.error || "Erreur lors de l'envoi de l'email de vérification");
+      showError(error.response?.data?.error || "Erreur lors de l'envoi de l'email de vérification", "Erreur");
     }
   };
 
@@ -386,6 +395,7 @@ export default function Signup() {
   // Formulaire d'inscription normal
   return (
     <>
+      <NotificationComponent />
       <style>{styles}</style>
       <div style={{
         minHeight: '100vh',

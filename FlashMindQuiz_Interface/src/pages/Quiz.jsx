@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { quizService } from '../services/quizService';
 import { authService } from '../services/authService';
+import { useNotification } from '../components/Notification';
 
 export default function QuizPage() {
   const { id } = useParams();
@@ -18,6 +19,9 @@ export default function QuizPage() {
   const [totalTime, setTotalTime] = useState(0);
 
   const user = authService.getCurrentUser();
+
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
 
   useEffect(() => {
     loadQuiz();
@@ -55,8 +59,10 @@ export default function QuizPage() {
     } catch (error) {
       console.error("❌ Erreur lors du chargement du quiz:", error);
       console.error("❌ Error details:", error.response?.data || error.message);
-      alert("Erreur lors du chargement du quiz");
-      navigate('/student/dashboard');
+      showError("Erreur lors du chargement du quiz", "Erreur");
+      setTimeout(() => {
+        navigate('/student/dashboard');
+      }, 1500);
     }
   };
 
@@ -137,7 +143,7 @@ export default function QuizPage() {
       });
     } catch (error) {
       console.error("Erreur lors de la soumission du quiz:", error);
-      alert("Erreur lors de la soumission du quiz");
+      showWarning("Vous avez déjà participé à ce quiz", "Participation déjà enregistrée");
     }
   };
 
@@ -371,6 +377,7 @@ export default function QuizPage() {
 
   return (
     <>
+      <NotificationComponent />
       <style>{styles}</style>
       <div style={{
         minHeight: '100vh',
@@ -571,7 +578,7 @@ export default function QuizPage() {
                     }}>
                       {selectedAnswer?.id === response.id && '✓'}
                     </div>
-                    <span style={{ flex: 1 }}>{response.response_text || response.responseText || 'Response not loaded'}</span>
+                    <span style={{ flex: 1 }}>{response.responseText || response.responseText || 'Response not loaded'}</span>
                   </div>
                 </button>
               ))}

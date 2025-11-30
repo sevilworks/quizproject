@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { authService } from '../services/authService';
 import { Toaster, toast } from 'react-hot-toast';
+import { useNotification } from '../components/Notification';
 
 
 export default function Login() {
@@ -15,10 +16,12 @@ export default function Login() {
   const [resetSent, setResetSent] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
 
-  const handleLogin = async () => {
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
+
+const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      alert("Veuillez remplir tous les champs !");
-      toast.error("Veuillez remplir tous les champs !");
+      showError("Veuillez remplir tous les champs !", "Champs requis");
       return;
     }
 
@@ -29,17 +32,22 @@ export default function Login() {
 
       // Redirection automatique selon le rôle
       authService.redirectToDashboard(data.role);
+      
+      // Ensure loading state is reset after successful login
+      setIsLoading(false);
 
     } catch (error) {
-      alert(error.response?.data?.message || 'Email ou mot de passe incorrect');
+      const errorMessage = error.message || error.response?.data?.message || error.response?.data?.error || 'Email ou mot de passe incorrect';
+      
+      // Show error message via toast notification
+      toast.error(errorMessage);
       setIsLoading(false);
-      toast.error(error.response?.data?.message || 'Email ou mot de passe incorrect');
     }
   };
 
   const handleForgotPassword = async () => {
     if (!resetEmail.trim()) {
-      alert("Veuillez entrer votre adresse email");
+      showError("Veuillez entrer votre adresse email", "Email requis");
       return;
     }
 
@@ -48,8 +56,9 @@ export default function Login() {
     try {
       await authService.requestPasswordReset(resetEmail);
       setResetSent(true);
+      showSuccess("Email de réinitialisation envoyé avec succès !", "Email envoyé");
     } catch (error) {
-      alert("Erreur lors de l'envoi de l'email de réinitialisation");
+      showError("Erreur lors de l'envoi de l'email de réinitialisation", "Erreur");
     } finally {
       setResetLoading(false);
     }

@@ -2,20 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { Save, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { quizService } from '../../services/quizService';
+import { useNotification } from '../../components/Notification';
 
 export default function EditQuiz() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
   const [error, setError] = useState(null);
   
   const [quizData, setQuizData] = useState({
     title: '',
     description: '',
-    duration: 30,
-    status: 'active'
+    duration: '30min',
+    status: 'brouillon'
   });
+
+  // Duration presets matching AddQuiz
+  const durationPresets = [
+    { value: '15min', label: '15 minutes' },
+    { value: '30min', label: '30 minutes' },
+    { value: '45min', label: '45 minutes' },
+    { value: '60min', label: '60 minutes' }
+  ];
+
+  // Status options
+  const statusOptions = [
+    { value: 'ACTIVE', label: 'Actif' },
+    { value: 'DRAFT', label: 'Brouillon' },
+    { value: 'ARCHIVED', label: 'Archivé' }
+  ];
   
   const [questions, setQuestions] = useState([]);
 
@@ -27,11 +46,24 @@ export default function EditQuiz() {
         setLoading(true);
         const quiz = await quizService.getQuizById(quizId);
         
+        // Convert backend status to frontend format
+        let frontendStatus = 'brouillon';
+        if (quiz.status === 'ACTIVE') frontendStatus = 'actif';
+        else if (quiz.status === 'DRAFT') frontendStatus = 'brouillon';
+        else if (quiz.status === 'ARCHIVED') frontendStatus = 'archive';
+        
+        // Convert duration to preset format
+        let durationPreset = '30min';
+        if (quiz.duration === 15) durationPreset = '15min';
+        else if (quiz.duration === 30) durationPreset = '30min';
+        else if (quiz.duration === 45) durationPreset = '45min';
+        else if (quiz.duration === 60) durationPreset = '60min';
+
         setQuizData({
           title: quiz.title || '',
           description: quiz.description || '',
-          duration: quiz.duration || 30,
-          status: quiz.status || 'active'
+          duration: durationPreset,
+          status: frontendStatus
         });
 
         if (quiz.questions) {
@@ -40,7 +72,7 @@ export default function EditQuiz() {
             questionText: q.question_text || q.questionText || '',
             responses: q.responses ? q.responses.map(r => ({
               id: r.id,
-              responseText: r.response_text || r.responseText || '',
+              responseText: r.responseText || r.responseText || '',
               isCorrect: r.is_correct || r.isCorrect || false
             })) : []
           })));
@@ -112,11 +144,20 @@ export default function EditQuiz() {
     try {
       setSaving(true);
       
+      // Convert frontend format to backend format
+      let backendDuration = parseInt(quizData.duration.replace('min', ''));
+      
+      let backendStatus = 'DRAFT';
+      if (quizData.status === 'actif') backendStatus = 'ACTIVE';
+      else if (quizData.status === 'brouillon') backendStatus = 'DRAFT';
+      else if (quizData.status === 'archive') backendStatus = 'ARCHIVED';
+
       // Step 1: Update quiz basic info
       await quizService.updateQuiz(quizId, {
         title: quizData.title,
         description: quizData.description,
-        duration: quizData.duration
+        duration: backendDuration,
+        status: backendStatus
       });
 
       // Step 2: Process questions and responses
@@ -176,11 +217,13 @@ export default function EditQuiz() {
         }
       }
       
-      alert('Quiz mis à jour avec succès!');
-      navigate('/professor/dashboard');
+      showSuccess('Quiz mis à jour avec succès!', 'Sauvegarde réussie');
+      setTimeout(() => {
+        navigate('/professor/dashboard');
+      }, 1500);
     } catch (err) {
       console.error('Error saving quiz:', err);
-      alert('Erreur lors de la sauvegarde du quiz: ' + (err.response?.data?.error || err.message));
+      showError('Erreur lors de la sauvegarde du quiz: ' + (err.response?.data?.error || err.message), 'Erreur de sauvegarde');
     } finally {
       setSaving(false);
     }
@@ -214,7 +257,9 @@ export default function EditQuiz() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <NotificationComponent />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-gradient-to-r from-[#624BFF] to-[#7C5FFF] text-white p-6 shadow-lg">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -259,15 +304,33 @@ export default function EditQuiz() {
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Durée (minutes) *
+                Statut *
               </label>
-              <input
-                type="number"
+              <select
+                value={quizData.status}
+                onChange={(e) => handleQuizDataChange('status', e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#624BFF] focus:border-[#624BFF] outline-none bg-white transition-all duration-200"
+              >
+                <option value="actif">Actif</option>
+                <option value="brouillon">Brouillon</option>
+                <option value="archive">Archivé</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Durée *
+              </label>
+              <select
                 value={quizData.duration}
-                onChange={(e) => handleQuizDataChange('duration', parseInt(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#624BFF] focus:border-transparent"
-                min="1"
-              />
+                onChange={(e) => handleQuizDataChange('duration', e.target.value)}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#624BFF] focus:border-[#624BFF] outline-none bg-white transition-all duration-200"
+              >
+                <option value="15min">15 minutes</option>
+                <option value="30min">30 minutes</option>
+                <option value="45min">45 minutes</option>
+                <option value="60min">60 minutes</option>
+              </select>
             </div>
           </div>
 
@@ -397,5 +460,6 @@ export default function EditQuiz() {
         </div>
       </div>
     </div>
+    </>
   );
 }

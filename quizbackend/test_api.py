@@ -212,7 +212,7 @@ def test_professor_routes():
     if question_id:
         # Test: Add Correct Response
         print_info("\n[TEST] Add Correct Response")
-        response_data = {"response_text": "Paris", "isCorrect": True}
+        response_data = {"responseText": "Paris", "isCorrect": True}
         test_endpoint("POST", f"/quiz/questions/{question_id}/responses", 
                      token=token,
                      json_data=response_data,
@@ -221,7 +221,7 @@ def test_professor_routes():
         # Test: Add Incorrect Responses
         print_info("\n[TEST] Add Incorrect Responses")
         for city in ["London", "Berlin", "Madrid"]:
-            response_data = {"response_text": city, "isCorrect": False}
+            response_data = {"responseText": city, "isCorrect": False}
             test_endpoint("POST", f"/quiz/questions/{question_id}/responses",
                          token=token,
                          json_data=response_data,
@@ -240,7 +240,7 @@ def test_professor_routes():
         if question2_id:
             # Add responses to second question
             for answer, correct in [("4", True), ("3", False), ("5", False), ("22", False)]:
-                response_data = {"response_text": answer, "isCorrect": correct}
+                response_data = {"responseText": answer, "isCorrect": correct}
                 test_endpoint("POST", f"/quiz/questions/{question2_id}/responses",
                              token=token,
                              json_data=response_data,

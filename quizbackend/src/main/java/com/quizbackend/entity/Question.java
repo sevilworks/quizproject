@@ -1,7 +1,9 @@
 package com.quizbackend.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -15,6 +17,7 @@ import java.util.List;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Question {
 
     @Id
@@ -24,6 +27,7 @@ public class Question {
     @Column(name = "quiz_id", nullable = false)
     private Integer quizId;
 
+    @JsonProperty("questionText")
     @Column(name = "question_text", columnDefinition = "TEXT", nullable = false)
     private String questionText;
 

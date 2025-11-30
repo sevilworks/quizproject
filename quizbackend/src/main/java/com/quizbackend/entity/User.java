@@ -5,6 +5,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
 @Entity
 @Table(name = "users")
 @Data
@@ -41,6 +43,9 @@ public class User {
     @Column(name = "email_verified")
     private Boolean emailVerified = false;
 
+    @Column(name = "enabled")
+    private Boolean enabled = false;
+
     @Column(name = "email_verification_token")
     private String emailVerificationToken;
 
@@ -49,6 +54,10 @@ public class User {
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private Student student;
+
+    @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JsonManagedReference
+    private Professor professor;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

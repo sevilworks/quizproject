@@ -24,8 +24,8 @@ public class Response {
     @Column(name = "question_id")
     private Integer questionId;
 
-    @JsonProperty("response_text")
-    @Column(name = "response_text", columnDefinition = "TEXT")
+    @JsonProperty("responseText")
+    @Column(name = "responseText", columnDefinition = "TEXT")
     private String responseText;
 
     @JsonProperty("isCorrect")

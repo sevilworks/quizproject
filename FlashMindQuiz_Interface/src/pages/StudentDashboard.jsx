@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { quizService } from '../services/quizService';
 import { studentService } from '../services/studentService';
+import { useNotification } from '../components/Notification';
 
 export default function StudentDashboard() {
   const navigate = useNavigate();
@@ -16,6 +17,9 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
 
   const user = authService.getCurrentUser();
   const studentName = user?.firstName && user?.lastName
@@ -98,15 +102,18 @@ export default function StudentDashboard() {
 
   const handleJoinByCode = async () => {
     if (!quizCode.trim()) {
-      alert("Veuillez entrer un code de quiz !");
+      showError("Veuillez entrer un code de quiz !", "Code requis");
       return;
     }
     
     try {
       const quiz = await quizService.getQuizByCode(quizCode);
-      window.location.href = `/student/quiz/${quiz.id}`;
+      showSuccess("Quiz trouvé ! Redirection en cours...", "Succès");
+      setTimeout(() => {
+        window.location.href = `/student/quiz/${quiz.id}`;
+      }, 1000);
     } catch (error) {
-      alert("Code de quiz invalide ou quiz introuvable");
+      showError("Code de quiz invalide ou quiz introuvable", "Erreur");
     }
   };
 
@@ -215,6 +222,7 @@ export default function StudentDashboard() {
 
   return (
     <>
+      <NotificationComponent />
       <style>{styles}</style>
       <div style={{
         minHeight: '100vh',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, QrCode, Users, Plus, Copy, Check } from 'lucide-react';
+import { Share2, QrCode, Users, Plus, Copy, Check, FileText, CheckCircle, Clock } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { quizService } from '../../services/quizService';
 
@@ -11,6 +11,13 @@ export default function QuizDetailsTemplate() {
   const [quiz, setQuiz] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [participations, setParticipations] = useState([]);
+  const [stats, setStats] = useState({
+    questionCount: 0,
+    participantCount: 0,
+    successRate: '0%',
+    duration: '0 min'
+  });
 
   // Validate quiz ID parameter
   const quizId = parseInt(id);
@@ -36,6 +43,62 @@ export default function QuizDetailsTemplate() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // Format relative time function
+  const formatRelativeTime = (dateString) => {
+    if (!dateString) return 'Récemment';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Récemment';
+      
+      const now = new Date();
+      const diffTime = Math.abs(now - date);
+      const diffMinutes = Math.floor(diffTime / (1000 * 60));
+      const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffMinutes < 60) {
+        return `Il y a ${diffMinutes} min`;
+      } else if (diffHours < 24) {
+        return `Il y a ${diffHours}h`;
+      } else if (diffDays === 0) {
+        return 'Aujourd\'hui';
+      } else if (diffDays === 1) {
+        return 'Hier';
+      } else if (diffDays <= 7) {
+        return `Il y a ${diffDays} jours`;
+      } else if (diffDays <= 30) {
+        return `Il y a ${Math.floor(diffDays / 7)} semaines`;
+      } else {
+        return 'Il y a longtemps';
+      }
+    } catch (error) {
+      console.error('Error parsing date:', error);
+      return 'Récemment';
+    }
+  };
+
+  // Format date/time function
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      
+      return date.toLocaleString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'N/A';
+    }
+  };
+
   useEffect(() => {
     const fetchQuizData = async () => {
       try {
@@ -54,23 +117,87 @@ export default function QuizDetailsTemplate() {
           setQuestions(quizData.questions.map(q => ({
             id: q.id,
             text: q.question_text || q.questionText,
-            options: q.responses ? q.responses.map(r => r.response_text || r.responseText) : []
+            options: q.responses ? q.responses.map(r => r.responseText || r.responseText) : []
           })));
         }
 
-        // Fetch participants
+        // Fetch participations using the same pattern as QuizReport.jsx
         try {
-          const participations = await quizService.getQuizParticipations(quizId);
-          const participantsData = participations.map(p => ({
-            id: p.id,
-            name: p.userId ? `Student ${p.userId}` : `Guest ${p.guestId}`,
-            avatar: p.userId ? `S${p.userId}` : `G${p.guestId}`,
-            score: p.score
-          }));
+          const participationsData = await quizService.getQuizParticipations(quizId);
+          setParticipations(participationsData);
+
+          // Calculate statistics
+          const questionCount = quizData.questions ? quizData.questions.length : 0;
+          const participantCount = participationsData.length;
+
+          // Calculate success rate
+          let successRate = '0%';
+          if (participationsData.length > 0) {
+            const successful = participationsData.filter(p => p.score && p.score >= 70).length;
+            successRate = Math.round((successful / participationsData.length) * 100) + '%';
+          }
+
+          // Duration (assuming it's stored in minutes or default to 30)
+          const duration = quizData.duration ? quizData.duration + ' min' : '30 min';
+
+          setStats({
+            questionCount,
+            participantCount,
+            successRate,
+            duration
+          });
+
+          // Transform participations data for display using the robust logic from QuizReport.jsx
+          const participantsData = participationsData.map(p => {
+            // Format participant name - use actual names from backend (snake_case from API)
+            let name = 'Participant anonyme';
+            let email = '';
+            
+            if (p.user_name) {
+              // Student/User with actual username
+              name = p.user_name;
+              email = p.user_email || '';
+            } else if (p.guest_name) {
+              // Guest with actual pseudo
+              name = p.guest_name;
+            } else if (p.user_id) {
+              // Fallback if name not provided
+              name = `Étudiant ${p.user_id}`;
+            } else if (p.guest_id) {
+              // Fallback if guest name not provided
+              name = `Invité ${p.guest_id}`;
+            }
+
+            // Format activity (last activity time)
+            const activity = formatRelativeTime(p.created_at);
+            const timing = formatDateTime(p.created_at);
+
+            // Create avatar
+            const avatar = name.charAt(0).toUpperCase() + (name.split(' ')[1] ? name.split(' ')[1].charAt(0).toUpperCase() : '');
+
+            return {
+              id: p.id,
+              name,
+              email,
+              activity,
+              timing,
+              rawScore: p.score,
+              avatar,
+              score: p.score !== null && p.score !== undefined ? `${Math.round(p.score)}%` : 'N/A'
+            };
+          });
+
           setParticipants(participantsData);
         } catch (err) {
-          console.warn('Could not fetch participants:', err);
+          console.warn('Could not fetch participations:', err);
+          setParticipations([]);
           setParticipants([]);
+          setStats({
+            questionCount: quizData.questions ? quizData.questions.length : 0,
+            participantCount: 0,
+            successRate: '0%',
+            duration: quizData.duration ? quizData.duration + ' min' : '30 min'
+          });
         }
 
       } catch (err) {
@@ -156,6 +283,51 @@ export default function QuizDetailsTemplate() {
         </div>
       </div>
 
+      {/* Statistics Cards */}
+      <div className="max-w-7xl mx-auto px-6 mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-500 font-semibold">Nombre de questions</span>
+              <div className="w-10 h-10 bg-[#EDEBFF] rounded flex items-center justify-center">
+                <FileText className="w-5 h-5 text-[#624BFF]"/>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">{stats.questionCount}</h2>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-500 font-semibold">Participants</span>
+              <div className="w-10 h-10 bg-[#EDEBFF] rounded flex items-center justify-center">
+                <Users className="w-5 h-5 text-[#624BFF]"/>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">{stats.participantCount}</h2>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-500 font-semibold">Taux de réussite</span>
+              <div className="w-10 h-10 bg-[#EDEBFF] rounded flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-[#624BFF]"/>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">{stats.successRate}</h2>
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between hover:scale-105 transition-transform">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-500 font-semibold">Durée du quiz</span>
+              <div className="w-10 h-10 bg-[#EDEBFF] rounded flex items-center justify-center">
+                <Clock className="w-5 h-5 text-[#624BFF]"/>
+              </div>
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900">{stats.duration}</h2>
+          </div>
+        </div>
+      </div>
+
       <div className="max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Questions */}
         <div className="lg:col-span-2 space-y-6">
@@ -208,9 +380,18 @@ export default function QuizDetailsTemplate() {
                   </div>
                   <div className="flex-1">
                     <span className="text-gray-700 font-semibold text-sm block">{p.name}</span>
-                    {p.score != null && (
-                      <span className="text-xs text-gray-500">Score: {p.score}%</span>
-                    )}
+                    {p.email && <span className="text-xs text-gray-500">{p.email}</span>}
+                    <div className="flex items-center gap-2 mt-1">
+                      {p.rawScore !== null && p.rawScore !== undefined && (
+                        <span className={`text-xs font-medium ${
+                          p.rawScore >= 70 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {p.score}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">•</span>
+                      <span className="text-xs text-gray-500">{p.activity}</span>
+                    </div>
                   </div>
                 </div>
               )) : (

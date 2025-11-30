@@ -7,6 +7,7 @@ import com.quizbackend.service.AuthService;
 import com.quizbackend.service.ProfessorService;
 import com.quizbackend.service.StudentService;
 import com.quizbackend.service.AdminService;
+import com.quizbackend.repository.UserRepository;
 import com.quizbackend.security.JwtUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
@@ -40,6 +41,9 @@ public class AuthController {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest request) {
         try {
@@ -60,23 +64,29 @@ public class AuthController {
             logger.info("RegisterStudent request received: username={}, email={}, firstName={}, lastName={}",
                     request.getUsername(), request.getEmail(), request.getFirstName(), request.getLastName());
 
-            User user = authService.register(
+            // Register user with email verification
+            Map<String, Object> authResponse = authService.registerStudent(
                 request.getUsername(),
                 request.getEmail(),
                 request.getPassword(),
-                User.Role.STUDENT,
                 request.getFirstName(),
                 request.getLastName()
             );
-            logger.info("User entity created: id={}, username={}, role={}", user.getId(), user.getUsername(), user.getRole());
+            logger.info("User registered with email verification: username={}", request.getUsername());
 
+            // Create student profile
+            User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found after registration"));
             Student student = studentService.createStudent(user, request.getFirstName(), request.getLastName());
             logger.info("Student entity saved: id={}, user={}, firstName={}, lastName={}",
                 student.getId(),
                 student.getUser() != null ? "id=" + student.getUser().getId() + ",username=" + student.getUser().getUsername() : "NULL",
                 student.getFirstName(), student.getLastName());
 
-            return ResponseEntity.ok(Map.of("message", "Student registered successfully", "userId", user.getId()));
+            // Add student info to response
+            authResponse.put("studentId", student.getId());
+            
+            return ResponseEntity.ok(authResponse);
         } catch (Exception e) {
             logger.error("Error registering student: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -84,25 +94,32 @@ public class AuthController {
     }
 
     @PostMapping("/register/professor")
+    @Transactional
     public ResponseEntity<?> registerProfessor(@RequestBody ProfessorRegisterRequest request) {
         try {
             logger.info("RegisterProfessor request received: username={}, email={}, firstName={}, lastName={}",
                     request.getUsername(), request.getEmail(), request.getFirstName(), request.getLastName());
 
-            User user = authService.register(
+            // Register user with email verification
+            Map<String, Object> authResponse = authService.registerProfessor(
                 request.getUsername(),
                 request.getEmail(),
                 request.getPassword(),
-                User.Role.PROFESSOR_FREE,
                 request.getFirstName(),
                 request.getLastName()
             );
-            logger.info("User entity created: id={}, username={}, role={}", user.getId(), user.getUsername(), user.getRole());
+            logger.info("User registered with email verification: username={}", request.getUsername());
 
+            // Create professor profile
+            User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found after registration"));
             Professor professor = professorService.createProfessor(user, request.getFirstName(), request.getLastName());
             logger.info("Professor entity saved: {}", professor);
 
-            return ResponseEntity.ok(Map.of("message", "Professor registered successfully", "userId", user.getId()));
+            // Add professor info to response
+            authResponse.put("professorId", professor.getUserId());
+            
+            return ResponseEntity.ok(authResponse);
         } catch (Exception e) {
             logger.error("Error registering professor: {}", e.getMessage(), e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -151,10 +168,9 @@ public class AuthController {
     }
 
     @PostMapping("/resend-verification")
-    public ResponseEntity<?> resendVerificationEmail(@RequestHeader("Authorization") String token) {
+    public ResponseEntity<?> resendVerificationEmail(@RequestBody ResendVerificationRequest request) {
         try {
-            String username = extractUsernameFromToken(token);
-            Map<String, Object> response = authService.resendVerificationEmail(username);
+            Map<String, Object> response = authService.resendVerificationEmail(request.getEmail());
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -250,5 +266,19 @@ public class AuthController {
         public void setToken(String token) { this.token = token; }
         public String getNewPassword() { return newPassword; }
         public void setNewPassword(String newPassword) { this.newPassword = newPassword; }
+    }
+
+    public static class ResendVerificationRequest {
+        private String email;
+
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+    }
+
+    public static class VerifyEmailRequest {
+        private String token;
+
+        public String getToken() { return token; }
+        public void setToken(String token) { this.token = token; }
     }
 }

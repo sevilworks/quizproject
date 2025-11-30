@@ -27,13 +27,13 @@ export const authService = {
   async signup(userData) {
     try {
       const endpoint = userData.role === 'student' ? '/register/student' : '/register/professor';
-      const payload = userData.role === 'student' ? {
+      const payload = {
         username: userData.username,
         email: userData.email,
         password: userData.password,
         first_name: userData.firstName,
         last_name: userData.lastName
-      } : userData;
+      };
       const response = await api.post(endpoint, payload);
       return response.data;
     } catch (error) {
@@ -46,16 +46,26 @@ export const authService = {
   async login(username, password) {
     try {
       const response = await api.post("/login", { username, password });
-      const { token, user, role } = response.data;
+      
+      // Handle different response structures
+      const { token, user, role, message, emailVerificationRequired, verified } = response.data;
+
+      // Removed email verification check - users can login without email verification
+      console.log("Login successful for user:", user.username);
 
       // Sauvegarder les informations dans localStorage
-      console.log("Login response - user data:", user);
-      localStorage.setItem("token", token);
-      localStorage.setItem("username", user.username);
-      localStorage.setItem("email", user.email);
-      localStorage.setItem("role", role);
-      localStorage.setItem("firstName", user.firstName || "");
-      localStorage.setItem("lastName", user.lastName || "");
+      if (token) {
+        console.log("Login response - user data:", user);
+        localStorage.setItem("token", token);
+        localStorage.setItem("userId", user.id);
+        localStorage.setItem("username", user.username);
+        localStorage.setItem("email", user.email);
+        localStorage.setItem("role", role);
+        localStorage.setItem("firstName", user.firstName || "");
+        localStorage.setItem("lastName", user.lastName || "");
+        // Store verification status
+        localStorage.setItem("emailVerified", verified !== false ? "true" : "false");
+      }
 
       return response.data;
     } catch (error) {
@@ -64,16 +74,26 @@ export const authService = {
     }
   },
 
-  // Vérification d'email - Note: Not implemented in backend, handle gracefully
+  // Vérification d'email avec token (GET request with query parameter)
   async verifyEmail(token) {
-    console.warn("Email verification not implemented in backend");
-    return { message: "Email verification not available" };
+    try {
+      const response = await api.get(`/verify-email?token=${encodeURIComponent(token)}`);
+      return response.data;
+    } catch (error) {
+      console.error("Erreur lors de la vérification d'email:", error);
+      throw error;
+    }
   },
 
-  // Renvoyer l'email de vérification - Note: Not implemented in backend, handle gracefully
+  // Renvoyer l'email de vérification
   async resendVerificationEmail(email) {
-    console.warn("Resend verification email not implemented in backend");
-    return { message: "Resend verification not available" };
+    try {
+      const response = await api.post("/resend-verification", { email });
+      return response.data;
+    } catch (error) {
+      console.error("Erreur lors de l'envoi de l'email de vérification:", error);
+      throw error;
+    }
   },
 
   // ========== PASSWORD RESET METHODS - Not implemented in backend ==========
@@ -104,6 +124,7 @@ export const authService = {
       // Nettoyer le localStorage
       localStorage.removeItem("token");
       localStorage.removeItem("refreshToken");
+      localStorage.removeItem("userId");
       localStorage.removeItem("username");
       localStorage.removeItem("email");
       localStorage.removeItem("role");
@@ -134,6 +155,7 @@ export const authService = {
   // Obtenir les informations de l'utilisateur connecté
   getCurrentUser() {
     return {
+      userId: localStorage.getItem("userId"),
       username: localStorage.getItem("username"),
       email: localStorage.getItem("email"),
       role: localStorage.getItem("role"),

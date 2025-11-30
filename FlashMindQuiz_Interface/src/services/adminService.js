@@ -34,6 +34,14 @@ export const adminService = {
     return response.data;
   },
 
+  // Get FREE professors (those without active subscriptions)
+  getFreeProfessors: async () => {
+    console.log("📡 API call: GET /admin/users/professors/free");
+    const response = await api.get('/admin/users/professors/free');
+    console.log("✅ Free professors response received:", response.data);
+    return response.data;
+  },
+
   // Subscription Management Methods
   // Get all subscriptions
   getSubscriptions: async () => {

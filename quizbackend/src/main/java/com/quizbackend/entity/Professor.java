@@ -8,7 +8,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "professors")
@@ -36,11 +38,18 @@ public class Professor {
     @Column(name = "subscription_end_date")
     private LocalDate subscriptionEndDate;
 
+    @OneToOne
+    @MapsId
+    @JoinColumn(name = "user_id")
+    @JsonBackReference
+    private User user;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subscription_id", insertable = false, updatable = false)
+    @JsonIgnore
     private Subscription subscription;
 
     @OneToMany(mappedBy = "professor", cascade = CascadeType.ALL)
-    @JsonManagedReference 
+    @JsonManagedReference
     private List<Quiz> quizzes = new ArrayList<>();
 }

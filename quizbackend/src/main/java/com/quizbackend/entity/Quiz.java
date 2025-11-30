@@ -19,6 +19,12 @@ import java.util.List;
 @AllArgsConstructor
 public class Quiz {
 
+    public enum Status {
+        ACTIVE,    // Quiz is available for students
+        DRAFT,     // Quiz is in draft, not accessible to students
+        ARCHIVED   // Quiz is archived, not accessible to students
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
@@ -37,6 +43,10 @@ public class Quiz {
 
     @Column(name = "duration")
     private Integer duration; // in minutes
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private Status status = Status.DRAFT; // Default to DRAFT
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

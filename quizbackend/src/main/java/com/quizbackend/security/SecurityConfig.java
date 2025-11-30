@@ -3,6 +3,7 @@ package com.quizbackend.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -37,6 +38,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         // Public endpoints
                         .requestMatchers("/auth/**").permitAll()
+                        // Explicitly permit email verification endpoints
+                        .requestMatchers(HttpMethod.GET, "/auth/verify-email").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/resend-verification").permitAll()
+                        .requestMatchers("/api/professor/subscription/**").permitAll()  // Temporarily allow for testing
                         .requestMatchers("/quiz/join/**").permitAll()
                         .requestMatchers("/quiz/guest/**").permitAll()
                         .requestMatchers("/test/**").permitAll()
@@ -45,6 +50,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html")
                         .permitAll()
+
+                        // Allow professors to get subscription plans
+                        .requestMatchers("/admin/subscriptions/plans").hasAnyRole("PROFESSOR_FREE", "PROFESSOR_VIP")
 
                         // Admin endpoints
                         .requestMatchers("/admin/**").hasRole("ADMIN")

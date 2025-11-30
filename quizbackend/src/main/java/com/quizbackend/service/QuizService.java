@@ -53,10 +53,38 @@ public class QuizService {
             throw new RuntimeException("Unauthorized to update this quiz");
         }
 
-        existingQuiz.setTitle(updatedQuiz.getTitle());
-        existingQuiz.setDescription(updatedQuiz.getDescription());
-        existingQuiz.setDuration(updatedQuiz.getDuration());
+        if (updatedQuiz.getTitle() != null && !updatedQuiz.getTitle().trim().isEmpty()) {
+            existingQuiz.setTitle(updatedQuiz.getTitle());
+        }
+        if (updatedQuiz.getDescription() != null) {
+            existingQuiz.setDescription(updatedQuiz.getDescription());
+        }
+        if (updatedQuiz.getDuration() != null && updatedQuiz.getDuration() > 0) {
+            existingQuiz.setDuration(updatedQuiz.getDuration());
+        }
+        if (updatedQuiz.getStatus() != null) {
+            existingQuiz.setStatus(updatedQuiz.getStatus());
+        }
 
+        return quizRepository.save(existingQuiz);
+    }
+
+    // Overloaded admin convenience method (no ownership check, simplified params)
+    public Quiz createQuiz(String title, String description, Integer professorId) {
+        Quiz quiz = new Quiz();
+        quiz.setTitle(title);
+        quiz.setDescription(description);
+        quiz.setProfessorId(professorId);
+        String code = generateUniqueQuizCode();
+        quiz.setCode(code);
+        return quizRepository.save(quiz);
+    }
+
+    public Quiz updateQuiz(Integer quizId, String title, String description) {
+        Quiz existingQuiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> new RuntimeException("Quiz not found"));
+        if (title != null) existingQuiz.setTitle(title);
+        if (description != null) existingQuiz.setDescription(description);
         return quizRepository.save(existingQuiz);
     }
 
@@ -76,7 +104,8 @@ public class QuizService {
     }
 
     public Optional<Quiz> getQuizByCode(String code) {
-        return quizRepository.findByCode(code);
+        return quizRepository.findByCode(code)
+                .filter(quiz -> quiz.getStatus() == Quiz.Status.ACTIVE);
     }
 
     public Quiz getQuizById(Integer quizId) {
@@ -180,6 +209,11 @@ public class QuizService {
                                            String studentResponses) {
         Quiz quiz = getQuizById(quizId);
 
+        // Check if quiz is active
+        if (quiz.getStatus() != Quiz.Status.ACTIVE) {
+            throw new RuntimeException("Quiz is not available for participation. Current status: " + quiz.getStatus());
+        }
+
         // Only students can participate in quizzes
         Integer participationUserId = null;
         if (userId != null) {
@@ -213,6 +247,12 @@ public class QuizService {
     public Participation registerParticipationByCode(String code, Integer userId, Integer guestId, Integer studentId) {
         Quiz quiz = quizRepository.findByCode(code)
                 .orElseThrow(() -> new RuntimeException("Quiz not found"));
+        
+        // Check if quiz is active
+        if (quiz.getStatus() != Quiz.Status.ACTIVE) {
+            throw new RuntimeException("Quiz is not available for participation. Current status: " + quiz.getStatus());
+        }
+        
         Integer quizId = quiz.getId();
 
         // Only students can participate in quizzes
@@ -271,6 +311,11 @@ public class QuizService {
     public Participation startQuizParticipation(Integer quizId, Integer userId, Integer studentId) {
         // Check if quiz exists
         Quiz quiz = getQuizById(quizId);
+
+        // Check if quiz is active
+        if (quiz.getStatus() != Quiz.Status.ACTIVE) {
+            throw new RuntimeException("Quiz is not available for participation. Current status: " + quiz.getStatus());
+        }
 
         // Only students can participate in quizzes
         Integer participationUserId = null;

@@ -29,7 +29,7 @@ public class ProfessorService {
 
     public Professor createProfessor(User user, String firstName, String lastName) {
         Professor professor = new Professor();
-        professor.setUserId(user.getId());
+        professor.setUser(user);  // Set the relationship object
         professor.setFirstName(firstName);
         professor.setLastName(lastName);
         
@@ -65,7 +65,7 @@ public class ProfessorService {
         if (professor.getSubscriptionEndDate() == null) {
             return false;
         }
-        return professor.getSubscriptionEndDate().isAfter(LocalDate.now()) || 
+        return professor.getSubscriptionEndDate().isAfter(LocalDate.now()) ||
                professor.getSubscriptionEndDate().isEqual(LocalDate.now());
     }
 

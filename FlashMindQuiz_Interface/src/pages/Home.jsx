@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useNotification } from '../components/Notification';
 
 export default function Home() {
 const navigate = useNavigate();
@@ -7,9 +8,12 @@ const navigate = useNavigate();
   const [emoji, setEmoji] = useState("😀");
   const [showQuiz, setShowQuiz] = useState(false);
 
+  // Notification hook
+  const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
+
   const commencer = () => {
     if (!nom.trim()) {
-      alert("Merci d'entrer votre nom !");
+      showError("Merci d'entrer votre nom !", "Nom requis");
       return;
     }
     
@@ -78,6 +82,7 @@ const navigate = useNavigate();
 
   return (
     <>
+      <NotificationComponent />
       <style>{styles}</style>
       <div style={{
         minHeight: '100vh',

@@ -241,8 +241,8 @@ export default function QuizReport() {
             return {
               ...response,
               questionText: question.question_text || question.questionText || 'Question non disponible',
-              studentAnswer: selectedResponse?.response_text || selectedResponse?.responseText || 'Pas de réponse',
-              correctAnswer: correctResponse?.response_text || correctResponse?.responseText || 'Réponse correcte non disponible'
+              studentAnswer: selectedResponse?.responseText || selectedResponse?.responseText || 'Pas de réponse',
+              correctAnswer: correctResponse?.responseText || correctResponse?.responseText || 'Réponse correcte non disponible'
             };
           });
           

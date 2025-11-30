@@ -1,24 +1,82 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
+import { authService } from '../services/authService';
 
 export default function EmailVerified() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const [status, setStatus] = useState("loading");
   const [message, setMessage] = useState("");
+  const verificationAttempted = useRef(false);
 
   useEffect(() => {
+    const token = searchParams.get("token");
     const success = searchParams.get("success");
-    const error = searchParams.get("error");
 
-    if (success === "true") {
+    // Check if we've already attempted verification for this token
+    const verificationKey = `email_verification_${token}`;
+    const alreadyAttempted = localStorage.getItem(verificationKey);
+
+    // Prevent multiple effect executions
+    if (verificationAttempted.current || alreadyAttempted) {
+      return;
+    }
+
+    // If token is provided in URL and verification hasn't been attempted yet
+    if (token && !verificationAttempted.current && !alreadyAttempted) {
+      console.log("Starting email verification with token:", token);
+      verificationAttempted.current = true;
+      
+      // Mark this token as attempted immediately
+      localStorage.setItem(verificationKey, "attempted");
+      
+      // Use setTimeout to prevent immediate re-renders from triggering again
+      setTimeout(() => {
+        handleVerification(token);
+      }, 0);
+    } else if (success === "true") {
+      verificationAttempted.current = true;
       setStatus("success");
       setMessage("Votre email a été vérifié avec succès !");
-    } else {
+    } else if (!token && !success) {
+      verificationAttempted.current = true;
       setStatus("error");
-      setMessage(error || "Une erreur s'est produite lors de la vérification de votre email.");
+      setMessage("Aucun token de vérification fourni.");
     }
   }, [searchParams]);
+
+  const handleVerification = async (token) => {
+    const verificationKey = `email_verification_${token}`;
+    
+    try {
+      console.log("Making verification request for token:", token);
+      const response = await authService.verifyEmail(token);
+      console.log("Verification successful:", response);
+      setStatus("success");
+      setMessage(response.message || "Votre email a été vérifié avec succès !");
+      
+      // Clean up localStorage key after successful verification
+      localStorage.removeItem(verificationKey);
+      
+      // Clear the token from URL after successful verification
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete("token");
+      setSearchParams(newSearchParams);
+      
+    } catch (error) {
+      console.log("Verification failed:", error);
+      setStatus("error");
+      setMessage(error.response?.data?.message || error.response?.data?.error || "Le lien de vérification est invalide ou a expiré.");
+      
+      // Clean up localStorage key after failed verification
+      localStorage.removeItem(verificationKey);
+      
+      // Clear the token from URL after failed verification
+      const newSearchParams = new URLSearchParams(searchParams);
+      newSearchParams.delete("token");
+      setSearchParams(newSearchParams);
+    }
+  };
 
   const handleLoginRedirect = () => {
     navigate("/login");

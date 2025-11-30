@@ -120,13 +120,13 @@ if [ -n "$PROF_TOKEN" ]; then
             curl -s -X POST "$BASE_URL/quiz/questions/$QUESTION_ID/responses" \
               -H "Authorization: Bearer $PROF_TOKEN" \
               -H "Content-Type: application/json" \
-              -d '{"response_text":"4","isCorrect":true}'
+              -d '{"responseText":"4","isCorrect":true}'
             
             # Add incorrect response
             curl -s -X POST "$BASE_URL/quiz/questions/$QUESTION_ID/responses" \
               -H "Authorization: Bearer $PROF_TOKEN" \
               -H "Content-Type: application/json" \
-              -d '{"response_text":"3","isCorrect":false}'
+              -d '{"responseText":"3","isCorrect":false}'
             
             echo "Responses added successfully"
         fi
