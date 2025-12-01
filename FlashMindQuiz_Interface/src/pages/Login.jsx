@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { authService } from '../services/authService';
-import { Toaster, toast } from 'react-hot-toast';
-import { useNotification } from '../components/Notification';
+import { useNotification } from '../components/Notification.jsx';
 
 
 export default function Login() {
@@ -37,10 +36,40 @@ const handleLogin = async () => {
       setIsLoading(false);
 
     } catch (error) {
-      const errorMessage = error.message || error.response?.data?.message || error.response?.data?.error || 'Email ou mot de passe incorrect';
+      console.error('Login error:', error);
       
-      // Show error message via toast notification
-      toast.error(errorMessage);
+      // Extract the most relevant error message
+      let errorMessage = 'Email ou mot de passe incorrect';
+      
+      // Priority 1: Use the message from authService (already extracted from backend response)
+      if (error.message && error.message !== 'Email ou mot de passe incorrect') {
+        errorMessage = error.message;
+      }
+      // Priority 2: Try to extract from response data (fallback for other errors)
+      else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      // Priority 3: Try to extract error field from response data (backend format)
+      else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      // Priority 4: Use status code for specific error types
+      else if (error.response?.status === 401) {
+        errorMessage = 'Identifiants incorrects. Vérifiez votre email/nom d\'utilisateur et votre mot de passe.';
+      }
+      else if (error.response?.status === 403) {
+        errorMessage = 'Accès refusé. Votre compte peut être désactivé.';
+      }
+      else if (error.response?.status >= 500) {
+        errorMessage = 'Erreur serveur. Veuillez réessayer plus tard.';
+      }
+      // Priority 5: Network errors
+      else if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion internet.';
+      }
+      
+      // Show error message via notification system
+      showError(errorMessage, "Erreur de connexion");
       setIsLoading(false);
     }
   };
@@ -198,6 +227,7 @@ const handleLogin = async () => {
 
   return (
     <>
+      <NotificationComponent />
       <style>{styles}</style>
       
       {/* Modal de réinitialisation de mot de passe */}

@@ -4,6 +4,8 @@ import com.quizbackend.entity.ProfessorSubscription;
 import com.quizbackend.entity.Professor;
 import com.quizbackend.repository.ProfessorSubscriptionRepository;
 import com.quizbackend.repository.ProfessorRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import java.util.Map;
 @Service
 @Transactional
 public class ProfessorSubscriptionService {
+
+    private static final Logger logger = LoggerFactory.getLogger(ProfessorSubscriptionService.class);
 
     @Autowired
     private ProfessorSubscriptionRepository professorSubscriptionRepository;
@@ -150,5 +154,58 @@ public class ProfessorSubscriptionService {
         ProfessorSubscription subscription = getSubscriptionById(id);
         subscription.setIsActive(isActive);
         professorSubscriptionRepository.save(subscription);
+    }
+
+    /**
+     * Update professor's plan directly (for development purposes)
+     * Maps plan names to professor roles: Free -> PROFESSOR_FREE, Premium/Enterprise -> PROFESSOR_VIP
+     */
+    public Map<String, Object> updateProfessorPlan(String professorIdStr, String newPlan) {
+        logger.info("Updating professor plan - Professor ID: {}, New Plan: {}", professorIdStr, newPlan);
+        
+        try {
+            // Convert professorId to Integer
+            Integer professorId = Integer.parseInt(professorIdStr);
+            
+            // Find professor by ID
+            Professor professor = professorRepository.findById(professorId)
+                    .orElseThrow(() -> new RuntimeException("Professor not found with ID: " + professorId));
+            
+            // Map plan names to roles
+            String role;
+            if ("free".equalsIgnoreCase(newPlan) || "basic".equalsIgnoreCase(newPlan)) {
+                role = "PROFESSOR_FREE";
+            } else if ("premium".equalsIgnoreCase(newPlan) || "vip".equalsIgnoreCase(newPlan) || "enterprise".equalsIgnoreCase(newPlan)) {
+                role = "PROFESSOR_VIP";
+            } else {
+                throw new IllegalArgumentException("Invalid plan type: " + newPlan + ". Valid plans: free, premium, enterprise");
+            }
+            
+            // Update professor role
+            String oldRole = professor.getRole();
+            professor.setRole(role);
+            professorRepository.save(professor);
+            
+            logger.info("Professor plan updated successfully - ID: {}, Old Role: {}, New Role: {}",
+                       professorId, oldRole, role);
+            
+            // Prepare response
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("professorId", professorId);
+            response.put("oldRole", oldRole);
+            response.put("newRole", role);
+            response.put("planName", newPlan);
+            response.put("message", "Plan updated successfully from " + oldRole + " to " + role);
+            
+            return response;
+            
+        } catch (NumberFormatException e) {
+            logger.error("Invalid professor ID format: {}", professorIdStr, e);
+            throw new IllegalArgumentException("Invalid professor ID format: " + professorIdStr);
+        } catch (RuntimeException e) {
+            logger.error("Error updating professor plan: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 }

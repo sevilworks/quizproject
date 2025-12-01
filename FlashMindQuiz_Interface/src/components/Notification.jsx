@@ -143,14 +143,16 @@ export const useNotification = () => {
     type: 'success',
     title: '',
     message: '',
+    duration: 3000,
   });
 
-  const showNotification = (type, message, title = '') => {
+  const showNotification = (type, message, title = '', duration = 3000) => {
     setNotification({
       isVisible: true,
       type,
       title,
       message,
+      duration,
     });
   };
 
@@ -165,14 +167,15 @@ export const useNotification = () => {
       message={notification.message}
       isVisible={notification.isVisible}
       onClose={hideNotification}
+      duration={notification.duration}
     />
   );
 
   return {
-    showSuccess: (message, title) => showNotification('success', message, title),
-    showError: (message, title) => showNotification('error', message, title),
-    showWarning: (message, title) => showNotification('warning', message, title),
-    showInfo: (message, title) => showNotification('info', message, title),
+    showSuccess: (message, title, duration = 3000) => showNotification('success', message, title, duration),
+    showError: (message, title, duration = 3000) => showNotification('error', message, title, duration),
+    showWarning: (message, title, duration = 3000) => showNotification('warning', message, title, duration),
+    showInfo: (message, title, duration = 3000) => showNotification('info', message, title, duration),
     NotificationComponent,
   };
 };

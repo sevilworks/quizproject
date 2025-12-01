@@ -2,11 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Bell, CreditCard, Lock, CheckCircle, ArrowLeft, Calendar, Shield, Crown } from 'lucide-react';
 import { useNotification } from '../../components/Notification';
+import { subscriptionService } from '../../services/subscriptionService';
+import { authService } from '../../services/authService';
 
 export default function PagePaiement() {
   const navigate = useNavigate();
   const location = useLocation();
   const [paymentMethod, setPaymentMethod] = useState('card');
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     cardNumber: '',
     cardName: '',
@@ -42,6 +45,36 @@ export default function PagePaiement() {
   const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
   
   useEffect(() => {
+    // Validate authentication on component mount
+    console.log('🔍 Validating authentication on component mount...');
+    
+    // Check if user is authenticated
+    if (!authService.isAuthenticated()) {
+      console.error('❌ User not authenticated, redirecting to login');
+      showError("Session expirée. Veuillez vous reconnecter.");
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+      return;
+    }
+
+    // Check if user has professor role
+    const userRole = authService.getUserRole();
+    console.log('👤 User role:', userRole);
+    
+    if (userRole !== 'PROFESSOR_FREE' && userRole !== 'PROFESSOR_VIP') {
+      console.error('❌ User is not a professor:', userRole);
+      showError("Accès non autorisé. Seuls les professeurs peuvent accéder à cette page.");
+      setTimeout(() => {
+        navigate('/');
+      }, 2000);
+      return;
+    }
+
+    // Get user info for debugging
+    const currentUser = authService.getCurrentUser();
+    console.log('👤 Current user info:', currentUser);
+
     // If no plan was selected, redirect back to subscription page
     if (!location.state?.selectedPlan) {
       console.log('No plan selected, using default plan');
@@ -53,20 +86,126 @@ export default function PagePaiement() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    // Here you would normally process the payment with your backend
-    // For now, we'll show a success message with the real plan data
-    const totalAmount = Math.round(priceInMillimes * 1.19);
-    showSuccess(
-      `Votre abonnement ${selectedPlan.name} a été activé avec succès ! Montant payé: ${totalAmount} millimes`,
-      "Paiement effectué"
-    );
-    
-    // Redirect to subscription page or dashboard after successful payment
+  // Function to handle re-authentication
+  const handleReAuth = () => {
+    console.log('🔄 Redirecting to login for re-authentication');
+    showWarning("Session expirée. Redirection vers la page de connexion...");
     setTimeout(() => {
-      navigate('/professor/abonnement');
-    }, 2500);
+      // Clear localStorage to ensure clean re-authentication
+      localStorage.clear();
+      navigate('/login');
+    }, 1500);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Get professor ID from localStorage using correct keys
+      console.log('🔍 Checking localStorage keys...');
+      
+      // Verify authentication first
+      if (!authService.isAuthenticated()) {
+        console.error('❌ User not authenticated');
+        showError("Session expirée. Veuillez vous reconnecter.");
+        handleReAuth();
+        return;
+      }
+
+      const userId = localStorage.getItem('userId');
+      const username = localStorage.getItem('username');
+      const role = localStorage.getItem('role');
+      const token = localStorage.getItem('token');
+      
+      console.log('📋 User data from localStorage:', {
+        hasUserId: !!userId,
+        hasUsername: !!username,
+        hasRole: !!role,
+        hasToken: !!token
+      });
+      
+      if (!userId) {
+        console.error('❌ No userId found in localStorage');
+        showError("ID utilisateur non trouvé. Veuillez vous reconnecter.");
+        handleReAuth();
+        return;
+      }
+      
+      if (!token) {
+        console.error('❌ No token found in localStorage');
+        showError("Session expirée. Veuillez vous reconnecter.");
+        handleReAuth();
+        return;
+      }
+      
+      if (role !== 'PROFESSOR_FREE' && role !== 'PROFESSOR_VIP') {
+        console.error('❌ User is not a professor:', role);
+        showError("Accès non autorisé. Seuls les professeurs peuvent accéder à cette page.");
+        setLoading(false);
+        return;
+      }
+      
+      const professorId = userId;
+      console.log('✅ Using professor ID:', professorId);
+
+      // Map plan names to backend format
+      let planType;
+      if (selectedPlan.id === 'premium' || selectedPlan.name.toLowerCase().includes('premium')) {
+        planType = 'premium';
+      } else if (selectedPlan.id === 'free' || selectedPlan.name.toLowerCase().includes('free') || selectedPlan.name.toLowerCase().includes('basique')) {
+        planType = 'free';
+      } else if (selectedPlan.id === 'enterprise' || selectedPlan.name.toLowerCase().includes('enterprise')) {
+        planType = 'enterprise';
+      } else {
+        planType = 'premium'; // Default to premium for unknown plans
+      }
+
+      console.log('📦 Plan type mapped to:', planType);
+
+      // Call the backend endpoint to update professor plan
+      console.log('🚀 Calling subscriptionService.updateProfessorPlan...');
+      const response = await subscriptionService.updateProfessorPlan(professorId, planType);
+      console.log('✅ Backend response:', response);
+      
+      if (response.data.success) {
+        const totalAmount = Math.round(priceInMillimes * 1.19);
+        showSuccess(
+          `Votre abonnement ${selectedPlan.name} a été activé avec succès ! Plan mis à jour: ${response.data.message}`,
+          "Paiement effectué"
+        );
+        
+        // Redirect to subscription page after successful update
+        setTimeout(() => {
+          navigate('/professor/abonnement');
+        }, 2500);
+      } else {
+        console.error('❌ Backend returned error:', response.data);
+        showError(response.data.error || "Erreur lors de la mise à jour du plan");
+      }
+    } catch (error) {
+      console.error('💥 Error updating plan:', error);
+      
+      // Handle different types of errors
+      if (error.response?.status === 401) {
+        console.error('🚫 Authentication error - redirecting to login');
+        showError("Session expirée. Redirection en cours...");
+        handleReAuth();
+        return;
+      } else if (error.response?.status === 403) {
+        console.error('🚫 Authorization error');
+        showError("Accès non autorisé. Veuillez vous reconnecter.");
+        handleReAuth();
+        return;
+      } else if (error.response?.status >= 500) {
+        console.error('🚫 Server error');
+        showError("Erreur serveur. Veuillez réessayer plus tard.");
+      } else {
+        showError(error.response?.data?.error || "Erreur lors de la mise à jour du plan");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const goBack = () => {
@@ -343,9 +482,21 @@ export default function PagePaiement() {
                 {paymentMethod === 'card' && (
                   <button
                     onClick={handleSubmit}
-                    className="w-full py-4 bg-gradient-to-r from-[#6B4FFF] to-[#8B6FFF] text-white rounded-2xl font-bold text-lg shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all"
+                    disabled={loading}
+                    className={`w-full py-4 text-white rounded-2xl font-bold text-lg shadow-lg transition-all ${
+                      loading
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#6B4FFF] to-[#8B6FFF] hover:shadow-2xl transform hover:scale-105'
+                    }`}
                   >
-                    Effectuer le paiement
+                    {loading ? (
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-2"></div>
+                        Traitement en cours...
+                      </div>
+                    ) : (
+                      'Effectuer le paiement'
+                    )}
                   </button>
                 )}
 

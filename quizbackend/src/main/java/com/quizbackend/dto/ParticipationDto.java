@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 public class ParticipationDto {
     private Integer id;
     private BigDecimal score;
+    private Boolean isFraud;
     private LocalDateTime createdAt;
     private LocalDateTime completedAt;
     private QuizSummary quiz;
@@ -35,6 +36,7 @@ public class ParticipationDto {
         ParticipationDto dto = new ParticipationDto();
         dto.setId(p.getId());
         dto.setScore(p.getScore());
+        dto.setIsFraud(p.getIsFraud());
         dto.setCreatedAt(p.getCreatedAt());
         dto.setUserId(p.getUserId());
         dto.setGuestId(p.getGuestId());

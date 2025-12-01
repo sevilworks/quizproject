@@ -214,47 +214,56 @@ public class QuizService {
             throw new RuntimeException("Quiz is not available for participation. Current status: " + quiz.getStatus());
         }
 
-        // Only students can participate in quizzes
-        Integer participationUserId = null;
-        if (userId != null) {
-            Optional<User> userOpt = userRepository.findById(userId);
-            if (userOpt.isEmpty() || userOpt.get().getRole() != User.Role.STUDENT) {
-                throw new RuntimeException("Only students can participate in quizzes");
-            }
-            participationUserId = userId;
-            if (participationRepository.existsByQuizIdAndUserId(quizId, participationUserId)) {
-                throw new RuntimeException("User has already participated in this quiz");
-            }
+        // Find existing participation (created when quiz started)
+        Participation participation = findExistingParticipation(quizId, userId, guestId);
+        if (participation == null) {
+            throw new RuntimeException("No participation found. Student must start quiz before submitting answers.");
         }
-        if (guestId != null && participationRepository.existsByQuizIdAndGuestId(quizId, guestId)) {
-            throw new RuntimeException("Guest has already participated in this quiz");
+
+        // Check if participation is marked as fraud
+        if (Boolean.TRUE.equals(participation.getIsFraud())) {
+            throw new RuntimeException("Cannot submit answers for a participation marked as fraud");
         }
 
         // Calculate score
         BigDecimal score = calculateScore(quizId, selectedResponseIds);
 
-        // Create participation record
-        Participation participation = new Participation();
-        participation.setQuizId(quizId);
-        participation.setUserId(participationUserId);
-        participation.setGuestId(guestId);
+        // Update existing participation record
         participation.setScore(score);
         participation.setStudentResponses(studentResponses);
 
         return participationRepository.save(participation);
     }
 
+    /**
+     * Register participation when student joins quiz by code
+     */
     public Participation registerParticipationByCode(String code, Integer userId, Integer guestId, Integer studentId) {
         Quiz quiz = quizRepository.findByCode(code)
                 .orElseThrow(() -> new RuntimeException("Quiz not found"));
+        
+        return createParticipation(quiz.getId(), userId, guestId, studentId);
+    }
+
+    /**
+     * Register participation when student accesses quiz questions
+     * This ensures fraud tracking begins immediately upon quiz access
+     */
+    public Participation registerParticipationForQuizAccess(Integer quizId, Integer userId, Integer guestId, Integer studentId) {
+        Quiz quiz = getQuizById(quizId);
         
         // Check if quiz is active
         if (quiz.getStatus() != Quiz.Status.ACTIVE) {
             throw new RuntimeException("Quiz is not available for participation. Current status: " + quiz.getStatus());
         }
-        
-        Integer quizId = quiz.getId();
 
+        return createParticipation(quizId, userId, guestId, studentId);
+    }
+
+    /**
+     * Internal method to create participation with proper validation
+     */
+    private Participation createParticipation(Integer quizId, Integer userId, Integer guestId, Integer studentId) {
         // Only students can participate in quizzes
         Integer participationUserId = null;
         if (userId != null) {
@@ -276,6 +285,7 @@ public class QuizService {
         participation.setUserId(participationUserId);
         participation.setGuestId(guestId);
         participation.setScore(java.math.BigDecimal.ZERO);
+        participation.setIsFraud(false); // Ensure isFraud is explicitly set to false
 
         return participationRepository.save(participation);
     }
@@ -334,9 +344,46 @@ public class QuizService {
         Participation participation = new Participation();
         participation.setQuizId(quizId);
         participation.setUserId(participationUserId);
+        participation.setGuestId(null);
         participation.setScore(java.math.BigDecimal.ZERO);
+        participation.setIsFraud(false); // Ensure isFraud is explicitly set to false
 
         return participationRepository.save(participation);
+    }
+
+    /**
+     * Mark a participation as fraud due to security violations
+     * @param participationId The ID of the participation to mark as fraud
+     * @param professorId The ID of the professor making the request (for authorization)
+     * @return The updated participation
+     */
+    public Participation markParticipationAsFraud(Integer participationId, Integer professorId) {
+        Participation participation = participationRepository.findById(participationId)
+                .orElseThrow(() -> new RuntimeException("Participation not found"));
+
+        Quiz quiz = participation.getQuiz();
+        if (!quiz.getProfessorId().equals(professorId)) {
+            throw new RuntimeException("Unauthorized to mark fraud for this quiz");
+        }
+
+        participation.setIsFraud(true);
+        return participationRepository.save(participation);
+    }
+
+    /**
+     * Find existing participation by quiz and user/guest
+     * @param quizId The quiz ID
+     * @param userId The user ID (optional)
+     * @param guestId The guest ID (optional)
+     * @return The existing participation or null if not found
+     */
+    private Participation findExistingParticipation(Integer quizId, Integer userId, Integer guestId) {
+        if (userId != null) {
+            return participationRepository.findByQuizIdAndUserId(quizId, userId).orElse(null);
+        } else if (guestId != null) {
+            return participationRepository.findByQuizIdAndGuestId(quizId, guestId).orElse(null);
+        }
+        return null;
     }
 
     private String generateUniqueQuizCode() {

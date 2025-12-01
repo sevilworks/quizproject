@@ -32,6 +32,9 @@ public class Participation {
     @Column(precision = 5, scale = 2)
     private BigDecimal score;
 
+    @Column(name = "is_fraud", nullable = false)
+    private Boolean isFraud = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -54,5 +57,8 @@ public class Participation {
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        if (isFraud == null) {
+            isFraud = false;
+        }
     }
 }

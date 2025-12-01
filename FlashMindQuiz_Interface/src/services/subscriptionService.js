@@ -1,11 +1,28 @@
 import api from './api';
 
-const BASE_URL = '/api/professor/subscription';
+const BASE_URL = '/api/professors/subscriptions';
 
 export const subscriptionService = {
-  // Get current professor subscription
+  // Get current professor subscription (includes role field)
   getProfessorSubscription(professorId) {
     return api.get(`${BASE_URL}/${professorId}`);
+  },
+
+  // Get current professor subscription with enhanced data including role
+  getEnhancedProfessorSubscription(professorId) {
+    return api.get(`${BASE_URL}/${professorId}`).then(response => {
+      // Ensure the response includes role information from the backend
+      const data = response.data;
+      return {
+        ...data,
+        // Extract role from the response (backend includes professor role)
+        role: data.role || 'PROFESSOR_FREE', // fallback to FREE if not provided
+        hasActiveSubscription: data.hasActiveSubscription || false,
+        subscription: data.subscription || null,
+        daysRemaining: data.daysRemaining || 0,
+        isExpiringSoon: data.isExpiringSoon || false
+      };
+    });
   },
 
   // Get available subscription plans
@@ -21,6 +38,11 @@ export const subscriptionService = {
   // Update subscription status
   updateSubscriptionStatus(subscriptionId, isActive) {
     return api.put(`${BASE_URL}/${subscriptionId}/status`, { isActive });
+  },
+
+  // Update professor plan directly (for development)
+  updateProfessorPlan(professorId, plan) {
+    return api.put(`${BASE_URL}/update-plan`, { professorId, plan });
   },
 
   // Delete subscription

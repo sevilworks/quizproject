@@ -122,10 +122,25 @@ export const quizService = {
   getPublicQuizzes: async () => {
     console.warn("Get public quizzes not implemented in backend");
     return [];
+  },
+
   // Get quiz report data (Professor) - includes quiz details and participations
   getQuizReport: async (quizId) => {
     const response = await api.get(`/quiz/${quizId}/report`);
     return response.data;
-  }
+  },
+
+  // Create participation entry when quiz starts
+  createParticipation: async (quizId) => {
+    const response = await api.post(`/quiz/${quizId}/start`);
+    console.log("📝 Participation created:", response.data);
+    return response.data;
+  },
+
+  // Mark participation as fraud
+  markAsFraud: async (participationId) => {
+    const response = await api.put(`/quiz/participation/${participationId}/fraud`);
+    console.log("🚫 Participation marked as fraud:", response.data);
+    return response.data;
   }
 };

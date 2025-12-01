@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { quizService } from '../services/quizService';
 import { authService } from '../services/authService';
 import { useNotification } from '../components/Notification';
+import { QuizSecurityManager, securityUtils } from '../utils/quizSecurity';
 
 export default function QuizPage() {
   const { id } = useParams();
@@ -18,7 +19,17 @@ export default function QuizPage() {
   const [quizStarted, setQuizStarted] = useState(false);
   const [totalTime, setTotalTime] = useState(0);
 
+  // Non-intrusive security state
+  const [securityViolations, setSecurityViolations] = useState(0);
+  const [securityActive, setSecurityActive] = useState(false);
+  const [warningMessage, setWarningMessage] = useState('');
+  const [showSecurityWarning, setShowSecurityWarning] = useState(false);
+  const [showFraudPopup, setShowFraudPopup] = useState(false);
+  const [participationId, setParticipationId] = useState(null);
+
   const user = authService.getCurrentUser();
+  const securityManagerRef = useRef(null);
+  const questionElementsRef = useRef([]);
 
   // Notification hook
   const { showSuccess, showError, showWarning, NotificationComponent } = useNotification();
@@ -39,6 +50,191 @@ export default function QuizPage() {
     }
   }, [timeRemaining, quizStarted, quiz]);
 
+  // Cleanup security manager when component unmounts
+  useEffect(() => {
+    return () => {
+      if (securityManagerRef.current) {
+        securityManagerRef.current.stop();
+        securityManagerRef.current = null;
+      }
+      securityUtils.removeAllOverlays();
+    };
+  }, []);
+
+  // Create participation entry when quiz starts
+  const createParticipationEntry = async () => {
+    try {
+      const participation = await quizService.createParticipation(id);
+      setParticipationId(participation.id);
+      console.log('📝 Participation created:', participation.id);
+      return participation;
+    } catch (error) {
+      console.error('Error creating participation:', error);
+      
+      // Check if it's a duplicate participation error
+      if (error.response?.data?.error?.includes('already participated') ||
+          error.message?.includes('already participated')) {
+        showError('Vous avez déjà participié à ce quiz. Redirection vers vos résultats...', 'Participation duplicate');
+        setTimeout(() => {
+          navigate('/student/dashboard');
+        }, 3000);
+        throw new Error('DUPLICATE_PARTICIPATION');
+      }
+      
+      throw error;
+    }
+  };
+
+  // Mark participation as fraud
+  const markParticipationAsFraud = async () => {
+    if (!participationId) return;
+    
+    try {
+      await quizService.markAsFraud(participationId);
+      console.log('🚫 Participation marked as fraud:', participationId);
+    } catch (error) {
+      console.error('Error marking participation as fraud:', error);
+    }
+  };
+
+  // Non-intrusive security management
+  const initializeSecurity = async () => {
+    try {
+      // Create participation entry first
+      const participation = await createParticipationEntry();
+      console.log('✅ Security initialization started with participation:', participation.id);
+    } catch (error) {
+      if (error.message === 'DUPLICATE_PARTICIPATION') {
+        // Error already handled in createParticipationEntry
+        return;
+      }
+      showError('Erreur lors de l\'initialisation du quiz', 'Erreur');
+      return;
+    }
+
+    try {
+      if (securityManagerRef.current) {
+        securityManagerRef.current.stop();
+      }
+
+      const manager = new QuizSecurityManager({
+        maxViolations: 3,
+        warningTimeout: 5000,
+        activityThreshold: 30000,
+        showDevToolsWarning: true
+      });
+
+      // Set up violation handler (non-intrusive)
+      manager.onViolation(async (violation, violationCount) => {
+        console.warn('🚨 Security violation detected:', violation.type);
+        setSecurityViolations(violationCount);
+        
+        let message = '';
+        switch (violation.type) {
+          case 'COPY_EVENT_BLOCKED':
+          case 'COPY_SHORTCUT_BLOCKED':
+            message = '⚠️ Copie détectée - Veuillez répondre sans copier';
+            break;
+          case 'PASTE_EVENT_BLOCKED':
+          case 'PASTE_SHORTCUT_BLOCKED':
+            message = '⚠️ Collage détecté - Veuillez répondre sans coller';
+            break;
+          case 'TAB_SWITCH_DETECTED':
+            message = '⚠️ Changement d\'onglet détecté - Restez sur le quiz';
+            break;
+          case 'WINDOW_BLUR_DETECTED':
+            message = '⚠️ Vous avez quitté la fenêtre - Restez concentré';
+            break;
+          case 'WINDOW_CLOSE_ATTEMPT':
+            message = '⚠️ Tentative de fermeture détectée';
+            break;
+          case 'DEV_TOOLS_BLOCKED':
+          case 'DEV_TOOLS_DETECTED':
+            message = '⚠️ Outils de développement détectés';
+            break;
+          case 'REFRESH_BLOCKED':
+            message = '⚠️ Actualisation détectée';
+            break;
+          case 'CONTEXT_MENU_BLOCKED':
+            message = '⚠️ Menu contextuel détecté';
+            break;
+          case 'MAX_VIOLATIONS_REACHED':
+            await handleMaxViolationsReached();
+            return;
+          default:
+            message = `⚠️ Action détectée: ${violation.type}`;
+        }
+        
+        // Show warning after 2 violations
+        if (violationCount >= 2) {
+          showSecurityWarningMessage(message);
+        }
+      });
+
+      // Set up activity monitoring
+      manager.onActivity((lastActivity) => {
+        console.log('User activity detected:', new Date(lastActivity).toLocaleTimeString());
+      });
+
+      securityManagerRef.current = manager;
+      manager.start();
+      setSecurityActive(true);
+      
+      console.log('🛡️ Non-intrusive security monitoring initialized');
+    } catch (error) {
+      console.error('Error initializing security:', error);
+      showError('Erreur lors de l\'initialisation de la surveillance', 'Erreur de sécurité');
+    }
+  };
+
+  const stopSecurity = () => {
+    if (securityManagerRef.current) {
+      securityManagerRef.current.stop();
+      securityManagerRef.current = null;
+    }
+    setSecurityActive(false);
+    securityUtils.removeAllOverlays();
+    console.log('🛡️ Security monitoring stopped');
+  };
+
+  const showSecurityWarningMessage = (message) => {
+    setWarningMessage(message);
+    setShowSecurityWarning(true);
+    
+    setTimeout(() => {
+      setShowSecurityWarning(false);
+    }, 3000);
+  };
+
+  const handleMaxViolationsReached = async () => {
+    console.log('🚫 Max violations reached - marking as fraud');
+    
+    try {
+      // Mark participation as fraud
+      await markParticipationAsFraud();
+      
+      // Show red toast notification for fraud
+      showError(
+        'Vous êtes marqué comme commettant une fraude pour ce quiz en raison de violations de sécurité multiples.',
+        'Marquage de fraude',
+        8000 // Show for 8 seconds
+      );
+      
+    } catch (error) {
+      console.error('Error marking participation as fraud:', error);
+      showError('Erreur lors du marquage de fraude', 'Erreur de système');
+    }
+    
+    // Show fraud popup
+    setShowFraudPopup(true);
+  };
+
+  const handleFraudPopupClose = () => {
+    setShowFraudPopup(false);
+    // Redirect to dashboard
+    navigate('/student/dashboard');
+  };
+
   const loadQuiz = async () => {
     try {
       console.log("🔍 Loading quiz with ID:", id);
@@ -46,8 +242,6 @@ export default function QuizPage() {
       console.log("📋 Quiz data received:", data);
       setQuiz(data);
 
-      // Charger les vraies questions du quiz depuis l'API
-      // Note: Ajoutez cette méthode dans quizService.js
       console.log("❓ Fetching questions for quiz ID:", id);
       const questionsData = await quizService.getQuizQuestions(id);
       console.log("📝 Questions data received:", questionsData);
@@ -66,9 +260,17 @@ export default function QuizPage() {
     }
   };
 
-  const handleStartQuiz = () => {
+  const handleStartQuiz = async () => {
     setQuizStarted(true);
     setTimeRemaining(30);
+    await initializeSecurity();
+    
+    // Apply text selection prevention to questions only
+    setTimeout(() => {
+      const questionElements = document.querySelectorAll('.question-text');
+      questionElementsRef.current = questionElements;
+      securityUtils.preventTextSelectionOnQuestions(questionElements);
+    }, 100);
   };
 
   const handleAnswerSelect = (response) => {
@@ -104,21 +306,25 @@ export default function QuizPage() {
 
   const finishQuiz = async (finalAnswers) => {
     try {
+      // Stop security monitoring before finishing
+      stopSecurity();
+
       // Extract selected response IDs for API submission
       const selectedResponseIds = finalAnswers.map(answer => answer.selectedResponseId).filter(id => id !== null);
 
-      // Debug logging for request body
       console.log("🚀 Submitting quiz answers for quiz ID:", id);
       console.log("📤 Request body data:", { ids: selectedResponseIds });
       console.log("📊 SelectedResponseIds array:", selectedResponseIds);
       console.log("📋 Final answers array:", finalAnswers);
+      console.log("🔒 Security violations:", securityViolations);
 
       // Submit quiz and get backend-calculated score
       const participation = await quizService.submitQuizAnswers(id, {
         selectedResponseIds: selectedResponseIds,
-        studentResponses: JSON.stringify(finalAnswers)
+        studentResponses: JSON.stringify(finalAnswers),
+        securityViolations: securityViolations
       });
-      const backendPercentage = parseFloat(participation.score); // Backend returns percentage as BigDecimal
+      const backendPercentage = parseFloat(participation.score);
 
       // Calculate score out of 1250 points using backend percentage
       const score = (backendPercentage / 100) * 1250;
@@ -127,13 +333,14 @@ export default function QuizPage() {
         quizId: id,
         score: score,
         percentage: backendPercentage,
-        correctAnswers: Math.round((backendPercentage / 100) * questions.length), // Approximate correct answers
+        correctAnswers: Math.round((backendPercentage / 100) * questions.length),
         totalQuestions: questions.length,
         totalTime: totalTime,
-        answers: finalAnswers
+        answers: finalAnswers,
+        securityViolations: securityViolations
       };
 
-      // Naviguer vers la page de résultats
+      // Navigate to results page
       navigate(`/student/results`, {
         state: {
           result,
@@ -175,8 +382,27 @@ export default function QuizPage() {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
     .fade-in {
       animation: fadeIn 0.6s ease-out;
+    }
+    .slide-in {
+      animation: slideIn 0.3s ease-out;
+    }
+    .question-text {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
     }
   `;
 
@@ -319,7 +545,7 @@ export default function QuizPage() {
               border: '1px solid #ffc107',
               borderRadius: '10px',
               padding: '15px',
-              marginBottom: '30px',
+              marginBottom: '20px',
               textAlign: 'left'
             }}>
               <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#856404' }}>
@@ -329,6 +555,25 @@ export default function QuizPage() {
                 <li>Vous avez 30 secondes par question</li>
                 <li>Une seule réponse par question</li>
                 <li>Le quiz commence dès que vous cliquez sur "Commencer"</li>
+              </ul>
+            </div>
+
+            <div style={{
+              backgroundColor: '#d1ecf1',
+              border: '1px solid #bee5eb',
+              borderRadius: '10px',
+              padding: '15px',
+              marginBottom: '30px',
+              textAlign: 'left'
+            }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#0c5460' }}>
+                🛡️ Détection de fraude non-intrusive :
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '20px', color: '#0c5460' }}>
+                <li>Vos actions sont surveillées en arrière-plan</li>
+                <li>3 violations de sécurité = markage comme fraude</li>
+                <li>Violations : changement d'onglet, copier/coller, etc.</li>
+                <li>Navigation et copie restent possibles (non bloquantes)</li>
               </ul>
             </div>
 
@@ -457,6 +702,62 @@ export default function QuizPage() {
             </div>
           </div>
 
+          {/* Security Warning Display */}
+          {showSecurityWarning && (
+            <div className="slide-in" style={{
+              textAlign: 'center',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                backgroundColor: '#ffc107',
+                color: '#856404',
+                padding: '12px 20px',
+                borderRadius: '15px',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 10px rgba(0,0,0,0.2)',
+                display: 'inline-block',
+                animation: 'pulse 2s infinite'
+              }}>
+                {warningMessage}
+                {securityViolations > 0 && (
+                  <span style={{ marginLeft: '10px' }}>
+                    ({securityViolations}/3 violations)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Security Status Indicator */}
+          {securityActive && (
+            <div className="fade-in" style={{
+              textAlign: 'center',
+              marginBottom: '20px'
+            }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: 'rgba(40, 167, 69, 0.9)',
+                color: 'white',
+                padding: '8px 16px',
+                borderRadius: '20px',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  backgroundColor: '#28a745',
+                  borderRadius: '50%',
+                  animation: 'pulse 1.5s infinite'
+                }}></div>
+                🛡️ Surveillance active
+              </div>
+            </div>
+          )}
+
           {/* Progress Bar */}
           <div style={{ marginBottom: '30px' }}>
             <div style={{
@@ -500,13 +801,17 @@ export default function QuizPage() {
               gap: '15px'
             }}>
               <div style={{ fontSize: '40px', marginTop: '5px' }}>❓</div>
-              <h2 style={{
+              <h2 className="question-text" style={{
                 fontSize: '28px',
                 fontWeight: 'bold',
                 color: '#333',
                 margin: 0,
                 flex: 1,
-                lineHeight: '1.4'
+                lineHeight: '1.4',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}>
                 {questions[currentQuestion]?.question_text || questions[currentQuestion]?.questionText || 'Question not loaded'}
               </h2>
@@ -526,7 +831,6 @@ export default function QuizPage() {
               gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
               gap: '20px'
             }}>
-              {console.log("🎯 Rendering current question:", currentQuestion, "Questions array:", questions, "Current question object:", questions[currentQuestion])}
               {questions[currentQuestion]?.responses?.map((response, index) => (
                 <button
                   key={response.id}
@@ -654,6 +958,85 @@ export default function QuizPage() {
           </p>
         </div>
       </div>
+
+      {/* Fraud Detection Popup */}
+      {showFraudPopup && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 999999,
+          backdropFilter: 'blur(5px)'
+        }}>
+          <div className="fade-in" style={{
+            backgroundColor: 'white',
+            borderRadius: '20px',
+            padding: '40px',
+            maxWidth: '500px',
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            animation: 'slideIn 0.3s ease-out'
+          }}>
+            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🚫</div>
+            
+            <h2 style={{
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: '#dc3545',
+              marginBottom: '20px'
+            }}>
+              Participation marquée comme fraude
+            </h2>
+            
+            <p style={{
+              fontSize: '18px',
+              color: '#6c757d',
+              marginBottom: '30px',
+              lineHeight: '1.6'
+            }}>
+              Votre participation a été marquée comme fraude en raison de nombreuses violations de sécurité détectées.
+            </p>
+            
+            <div style={{
+              backgroundColor: '#f8d7da',
+              border: '1px solid #f5c6cb',
+              borderRadius: '10px',
+              padding: '15px',
+              marginBottom: '30px',
+              color: '#721c24'
+            }}>
+              <strong>Violations détectées :</strong> {securityViolations}<br/>
+              <small>Limite autorisée : 3 violations maximum</small>
+            </div>
+            
+            <button
+              onClick={handleFraudPopupClose}
+              style={{
+                padding: '15px 30px',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                color: 'white',
+                backgroundColor: '#dc3545',
+                border: 'none',
+                borderRadius: '15px',
+                cursor: 'pointer',
+                transition: 'all 0.3s'
+              }}
+              onMouseOver={(e) => e.target.style.backgroundColor = '#c82333'}
+              onMouseOut={(e) => e.target.style.backgroundColor = '#dc3545'}
+            >
+              Retour au tableau de bord
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

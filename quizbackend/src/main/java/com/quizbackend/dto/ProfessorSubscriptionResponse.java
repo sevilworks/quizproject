@@ -22,6 +22,9 @@ public class ProfessorSubscriptionResponse {
     private Boolean isActive;
     private LocalDateTime createdAt;
     
+    // Professor role information
+    private String role; // PROFESSOR_FREE, PROFESSOR_VIP
+    
     // Computed fields
     private Long daysRemaining;
     private Boolean isExpiringSoon;

@@ -38,6 +38,9 @@ public class Professor {
     @Column(name = "subscription_end_date")
     private LocalDate subscriptionEndDate;
 
+    @Column(name = "role", length = 50)
+    private String role; // PROFESSOR_FREE, PROFESSOR_VIP
+
     @OneToOne
     @MapsId
     @JoinColumn(name = "user_id")

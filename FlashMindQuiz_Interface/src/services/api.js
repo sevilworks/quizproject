@@ -48,8 +48,9 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       console.error("🚫 Token expiré ou invalide");
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      // Clear all authentication-related localStorage items
+      const authKeys = ["token", "userId", "username", "email", "role", "firstName", "lastName", "emailVerified", "refreshToken"];
+      authKeys.forEach(key => localStorage.removeItem(key));
       window.location.href = "/login";
     } else if (error.response?.status === 403) {
       console.error("🚫 Accès refusé - Vérifiez les autorisations");

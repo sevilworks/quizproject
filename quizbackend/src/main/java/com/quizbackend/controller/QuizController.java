@@ -328,11 +328,29 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
     }
 
     @GetMapping("/{id}/questions")
-    public ResponseEntity<?> getQuizQuestions(@PathVariable Integer id) {
+    public ResponseEntity<?> getQuizQuestions(@PathVariable Integer id, Authentication authentication) {
         try {
-            // For now, allow access without authentication. In future, check if user has access
+            // Extract user/guest information if available
+            Integer userId = null;
+            if (authentication != null) {
+                String username = authentication.getName();
+                userId = authService.getCurrentUser(username).getId();
+            }
+            
+            // Create participation immediately when student accesses quiz questions
+            // This ensures fraud tracking begins from the moment they access the quiz
+            try {
+                Participation participation = quizService.registerParticipationForQuizAccess(id, userId, null, null);
+                System.out.println("✅ Participation created immediately upon quiz access: " + participation.getId());
+            } catch (RuntimeException e) {
+                // If participation already exists (duplicate access), that's fine - just log it
+                if (!e.getMessage().contains("already participated")) {
+                    throw e;
+                }
+                System.out.println("ℹ️ Student already participated in this quiz: " + e.getMessage());
+            }
+            
             Quiz quiz = quizService.getQuizByIdWithQuestions(id);
-            // Return quiz with questions (assuming lazy loading or eager fetch)
             return ResponseEntity.ok(quiz);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -393,6 +411,37 @@ public ResponseEntity<?> addQuestion(@PathVariable Integer quizId, @RequestBody 
                 return dto;
             }).collect(Collectors.toList());
             return ResponseEntity.ok(dtos);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // Fraud marking endpoint for security violations
+    @PutMapping("/participation/{participationId}/fraud")
+    public ResponseEntity<?> markParticipationAsFraud(@PathVariable Integer participationId, Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            Integer professorId = getProfessorId(username);
+            
+            Participation participation = quizService.markParticipationAsFraud(participationId, professorId);
+            // Map to DTO
+            ParticipationDto dto = new ParticipationDto();
+            dto.setId(participation.getId());
+            dto.setScore(participation.getScore());
+            dto.setCreatedAt(participation.getCreatedAt());
+            dto.setUserId(participation.getUserId());
+            dto.setGuestId(participation.getGuestId());
+            dto.setStudentResponses(participation.getStudentResponses());
+            dto.setIsFraud(participation.getIsFraud());
+            Quiz q = quizService.getQuizById(participation.getQuizId());
+            if (q != null) {
+                ParticipationDto.QuizSummary qs = new ParticipationDto.QuizSummary();
+                qs.setId(q.getId());
+                qs.setTitle(q.getTitle());
+                qs.setCode(q.getCode());
+                dto.setQuiz(qs);
+            }
+            return ResponseEntity.ok(dto);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

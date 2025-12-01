@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface ParticipationRepository extends JpaRepository<Participation, Integer> {
@@ -16,6 +17,8 @@ public interface ParticipationRepository extends JpaRepository<Participation, In
     
     List<Participation> findByUserId(Integer userId);
     List<Participation> findByGuestId(Integer guestId);
+    Optional<Participation> findByQuizIdAndUserId(Integer quizId, Integer userId);
+    Optional<Participation> findByQuizIdAndGuestId(Integer quizId, Integer guestId);
     boolean existsByQuizIdAndUserId(Integer quizId, Integer userId);
     boolean existsByQuizIdAndGuestId(Integer quizId, Integer guestId);
 

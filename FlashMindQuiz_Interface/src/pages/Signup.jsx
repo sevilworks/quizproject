@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { authService } from '../services/authService';
+import { useNotification } from '../components/Notification.jsx';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -14,7 +15,8 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
+  const { showSuccess, showError, NotificationComponent } = useNotification();
 
   const handleChange = (e) => {
     setFormData({

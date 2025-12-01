@@ -70,7 +70,26 @@ export const authService = {
       return response.data;
     } catch (error) {
       console.error("Erreur lors de la connexion:", error);
-      throw error;
+      
+      // Extract meaningful error message from backend response
+      let errorMessage = 'Email ou mot de passe incorrect';
+      
+      if (error.response) {
+        // Backend responded with error status
+        const responseData = error.response.data;
+        errorMessage = responseData?.error || responseData?.message || responseData || errorMessage;
+      } else if (error.request) {
+        // Request was made but no response received
+        errorMessage = 'Impossible de contacter le serveur. Vérifiez votre connexion internet.';
+      } else if (error.message) {
+        // Something else happened
+        errorMessage = error.message;
+      }
+      
+      // Create a new error with the extracted message
+      const authError = new Error(errorMessage);
+      authError.originalError = error;
+      throw authError;
     }
   },
 
