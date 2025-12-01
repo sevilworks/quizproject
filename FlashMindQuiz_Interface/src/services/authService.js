@@ -1,6 +1,9 @@
 import axios from "axios";
 
-const API_URL = "http://localhost:8080/api/auth";
+// Use environment variable with fallback to localhost for development
+const API_URL = import.meta.env.VITE_API_BASE_URL
+  ? `${import.meta.env.VITE_API_BASE_URL}/auth`
+  : "http://localhost:8080/api/auth";
 
 // Configuration d'Axios avec intercepteur
 const api = axios.create({
